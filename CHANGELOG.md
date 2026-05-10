@@ -20,6 +20,19 @@
 
 ---
 
+## [0.1.15] - 2026-05-10
+
+### Fixed
+- **巴菲特/段永平原文流式中断 bug（长期高频复现）**：根因是 `llm.ts` 全程不读 `finish_reason`，截断响应被当作成功落盘；三处 `max_tokens` 不一致（runMaster 4096 / runMasterStream 8192 / judge+reviewer 16384），思考型模型的 `reasoning_content` 与 `content` 共享预算导致 content 被吃空
+- **Tier 1**：`complete` / `completeStream` 新增 `CompletionMeta`（`finish_reason` / `truncated` / `retried_on_length` / `retried_on_thinking` / `max_tokens_used`），`finish_reason === "length"` 时自动一次性翻倍预算重试（上限 32768）
+- **Tier 2**：默认预算从 4096 → 16384，runMaster / runMasterStream 统一到 16384；`completeMasterStream` 截断检测强化为「结构（三段式/PASS 关键词）+ 末尾合法标点收束 + 非 length 截断」三重校验，任一不满足即重试
+- **桌面端**：截断时通过 `ask:warn` IPC 推送警告；`payload.json` 新增 `llm_meta` 字段，记录每段大师原文的 `finish_reason` 等元信息，便于排错
+
+### Changed
+- `apps/desktop/package.json` 版本号 `0.1.14` → `0.1.15`
+
+---
+
 ## [0.1.14] - 2026-05-10
 
 ### Changed

@@ -89402,7 +89402,7 @@ function currentModel() {
   return process.env.LLM_MODEL ?? MODEL_DEFAULT;
 }
 function currentMaxTokens() {
-  return Number(process.env.LLM_MAX_TOKENS ?? 4096);
+  return Number(process.env.LLM_MAX_TOKENS ?? 16384);
 }
 let cached = null;
 function getClient() {
@@ -89418,36 +89418,88 @@ function getClient() {
   }
   return cached.client;
 }
-async function complete(messages, opts) {
-  const r2 = await getClient().chat.completions.create({
-    model: currentModel(),
-    temperature: opts?.temperature ?? 0.4,
-    max_tokens: opts?.maxTokens ?? currentMaxTokens(),
-    messages
-  });
-  const msg = r2.choices[0]?.message ?? {};
-  const content = (msg.content ?? "").trim();
-  if (content) return content;
-  const reasoning = (msg.reasoning_content ?? "").trim();
-  if (reasoning) {
-    return `[模型仅返回思考过程，未给最终回答；以下为思考内容]
-
-${reasoning}`;
-  }
-  return "";
+function emptyMeta(model, maxTokens) {
+  return {
+    finish_reason: null,
+    truncated: false,
+    retried_on_length: false,
+    retried_on_thinking: false,
+    max_tokens_used: maxTokens,
+    model
+  };
 }
-async function completeStream(messages, onChunk, opts) {
+async function completeWithMeta(messages, opts) {
+  const model = currentModel();
+  const baseBudget = opts?.maxTokens ?? currentMaxTokens();
+  const runOnce = async (budget) => {
+    const r2 = await getClient().chat.completions.create({
+      model,
+      temperature: opts?.temperature ?? 0.4,
+      max_tokens: budget,
+      messages
+    });
+    const choice = r2.choices[0] ?? {};
+    const msg = choice.message ?? {};
+    const finishReason2 = choice.finish_reason ?? null;
+    const content2 = (msg.content ?? "").trim();
+    const reasoning2 = (msg.reasoning_content ?? "").trim();
+    return { content: content2, reasoning: reasoning2, finishReason: finishReason2 };
+  };
+  const meta = emptyMeta(model, baseBudget);
+  let { content, reasoning, finishReason } = await runOnce(baseBudget);
+  meta.finish_reason = finishReason;
+  meta.truncated = finishReason === "length";
+  if (meta.truncated) {
+    const retryBudget = Math.min(baseBudget * 2, 32768);
+    if (retryBudget > baseBudget) {
+      console.warn(
+        `[llm] finish_reason=length at ${baseBudget}, retrying with ${retryBudget}`
+      );
+      try {
+        const second = await runOnce(retryBudget);
+        meta.retried_on_length = true;
+        meta.max_tokens_used = retryBudget;
+        meta.finish_reason = second.finishReason;
+        meta.truncated = second.finishReason === "length";
+        content = second.content;
+        reasoning = second.reasoning;
+      } catch (e2) {
+        console.warn("[llm] length-retry failed:", e2);
+      }
+    }
+  }
+  if (content) return { text: content, meta };
+  if (reasoning) {
+    return {
+      text: `[模型仅返回思考过程，未给最终回答；以下为思考内容]
+
+${reasoning}`,
+      meta
+    };
+  }
+  return { text: "", meta };
+}
+async function complete(messages, opts) {
+  const r2 = await completeWithMeta(messages, opts);
+  return r2.text;
+}
+async function completeStreamWithMeta(messages, onChunk, opts) {
+  const model = currentModel();
+  const baseBudget = opts?.maxTokens ?? currentMaxTokens();
+  const meta = emptyMeta(model, baseBudget);
   const stream = await getClient().chat.completions.create({
-    model: currentModel(),
+    model,
     temperature: opts?.temperature ?? 0.4,
-    max_tokens: opts?.maxTokens ?? currentMaxTokens(),
+    max_tokens: baseBudget,
     messages,
     stream: true
   });
   let answer = "";
   let thinking = "";
+  let finishReason = null;
   for await (const part of stream) {
-    const delta = part.choices?.[0]?.delta ?? {};
+    const choice = part.choices?.[0] ?? {};
+    const delta = choice.delta ?? {};
     if (delta.reasoning_content) {
       thinking += delta.reasoning_content;
       onChunk(delta.reasoning_content, "thinking");
@@ -89456,47 +89508,108 @@ async function completeStream(messages, onChunk, opts) {
       answer += delta.content;
       onChunk(delta.content, "answer");
     }
+    if (choice.finish_reason) finishReason = choice.finish_reason;
   }
-  if (answer.trim()) return answer;
+  meta.finish_reason = finishReason;
+  meta.truncated = finishReason === "length";
+  if (answer.trim() && meta.truncated) {
+    const retryBudget = Math.min(baseBudget * 2, 32768);
+    if (retryBudget > baseBudget) {
+      console.warn(
+        `[llm] stream finish_reason=length, non-stream retry with ${retryBudget}`
+      );
+      try {
+        const r2 = await completeWithMeta(messages, { ...opts, maxTokens: retryBudget });
+        if (r2.text && !r2.text.startsWith("[模型仅返回思考过程")) {
+          onChunk("\n\n[已自动用更大预算重新生成完整版本]\n\n", "answer");
+          onChunk(r2.text, "answer");
+          meta.retried_on_length = true;
+          meta.max_tokens_used = r2.meta.max_tokens_used;
+          meta.finish_reason = r2.meta.finish_reason;
+          meta.truncated = r2.meta.truncated;
+          return { text: r2.text, meta };
+        }
+      } catch (e2) {
+        console.warn("[llm] length-retry (stream) failed:", e2);
+      }
+    }
+  }
+  if (answer.trim()) return { text: answer, meta };
   if (thinking.trim()) {
     console.warn(
       "[llm] stream returned only reasoning_content, retrying in non-stream mode..."
     );
     try {
-      const retry = await complete(messages, opts);
-      const retryClean = retry.replace(/^\[模型仅返回思考过程[^\]]*\]\s*\n*/, "").trim();
-      if (retryClean && !retry.startsWith("[模型仅返回思考过程")) {
-        onChunk(retryClean, "answer");
-        return retryClean;
+      const r2 = await completeWithMeta(messages, opts);
+      const cleaned = r2.text.replace(/^\[模型仅返回思考过程[^\]]*\]\s*\n*/, "").trim();
+      if (cleaned && !r2.text.startsWith("[模型仅返回思考过程")) {
+        onChunk(cleaned, "answer");
+        meta.retried_on_thinking = true;
+        meta.finish_reason = r2.meta.finish_reason;
+        meta.truncated = r2.meta.truncated;
+        meta.max_tokens_used = r2.meta.max_tokens_used;
+        return { text: cleaned, meta };
       }
     } catch (e2) {
       console.warn("[llm] non-stream retry failed:", e2);
     }
-    return `[模型仅返回思考过程，未给最终回答；以下为思考内容]
+    return {
+      text: `[模型仅返回思考过程，未给最终回答；以下为思考内容]
 
-${thinking}`;
+${thinking}`,
+      meta
+    };
   }
-  return "";
+  return { text: "", meta };
+}
+async function completeStream(messages, onChunk, opts) {
+  const r2 = await completeStreamWithMeta(messages, onChunk, opts);
+  return r2.text;
 }
 async function completeMasterStream(messages, onChunk, opts) {
-  const isValidMasterOutput = (text) => {
-    if (!text || text.startsWith("[模型仅返回思考过程")) return false;
-    return /第[零一二三零一二三]步/.test(text) || /\b(PASS|FAIL|GRAY)\b/.test(text);
+  const isThinkFallback = (t2) => !t2 || t2.startsWith("[模型仅返回思考过程");
+  const hasProperEnding = (text) => {
+    const trimmed = text.trim();
+    if (!trimmed) return false;
+    const last = trimmed.slice(-1);
+    return /[。！？.!?”"）)\]\}>】～]/.test(last);
   };
-  const first = await completeStream(messages, onChunk, opts);
-  if (isValidMasterOutput(first)) return first;
+  const hasStructure = (text) => {
+    return /第[零一二三]步/.test(text) || /\b(PASS|FAIL|GRAY)\b/.test(text);
+  };
+  const isValid = (text, meta) => {
+    if (isThinkFallback(text)) return false;
+    if (meta.truncated) return false;
+    if (!hasStructure(text)) return false;
+    if (!hasProperEnding(text)) return false;
+    return true;
+  };
+  const first = await completeStreamWithMeta(messages, onChunk, opts);
+  if (isValid(first.text, first.meta)) return first;
+  const reasons = [];
+  if (isThinkFallback(first.text)) reasons.push("thinking-only");
+  if (first.meta.truncated) reasons.push(`finish_reason=length(${first.meta.max_tokens_used})`);
+  if (first.text && !hasStructure(first.text)) reasons.push("no-structure");
+  if (first.text && !isThinkFallback(first.text) && !hasProperEnding(first.text))
+    reasons.push("no-proper-ending");
   console.warn(
-    `[llm] ${opts?.agentName ?? "master"} agent returned invalid output, retrying once...`
+    `[llm] ${opts?.agentName ?? "master"} invalid output [${reasons.join(",")}], retry once`
   );
+  const retryBudget = first.meta.truncated ? Math.min((opts?.maxTokens ?? currentMaxTokens()) * 2, 32768) : opts?.maxTokens ?? currentMaxTokens();
   const retryMsgs = messages.map(
-    (m2) => m2.role === "system" ? { ...m2, content: m2.content + "\n\n⚠️ 直接输出最终 Markdown 答案，不要只输出思考过程。" } : m2
+    (m2) => m2.role === "system" ? {
+      ...m2,
+      content: m2.content + "\n\n⚠️ 直接输出最终 Markdown 答案，不要只输出思考过程。必须完整输出三段式（第零/一/二/三步），并以明确的句末标点收束。"
+    } : m2
   );
-  const second = await completeStream(retryMsgs, onChunk, {
+  const second = await completeStreamWithMeta(retryMsgs, onChunk, {
     ...opts,
-    temperature: (opts?.temperature ?? 0.4) + 0.1
+    temperature: (opts?.temperature ?? 0.4) + 0.1,
+    maxTokens: retryBudget
   });
-  if (isValidMasterOutput(second)) return second;
-  return first || second;
+  if (isValid(second.text, second.meta)) return second;
+  const best = second.text.length >= first.text.length ? second : first;
+  return best;
 }
 function resolveRoot() {
   if (process.env.VC_REPO_ROOT) return process.env.VC_REPO_ROOT;
@@ -89552,7 +89665,7 @@ async function runMasterStream({ master, data: data2 }, onChunk) {
   const system = await loadPrompt(master);
   return completeMasterStream(buildMessages(master, data2, system), onChunk, {
     temperature: 0.3,
-    maxTokens: 8192,
+    maxTokens: 16384,
     agentName: master
   });
 }
@@ -89822,7 +89935,9 @@ function scoreColor(v2) {
 function verdictBadge(v2) {
   const map = {
     worth_research: { text: "值得研究", bg: "#dcfce7", fg: "#166534" },
+    skip: { text: "暂时跳过", bg: "#fee2e2", fg: "#991b1b" },
     pass: { text: "暂时跳过", bg: "#fee2e2", fg: "#991b1b" },
+    // legacy alias，v0.1.14 起改用 skip
     out_of_competence: { text: "能力圈外", bg: "#e5e7eb", fg: "#374151" },
     cheap: { text: "偏低估", bg: "#dcfce7", fg: "#166534" },
     fair: { text: "估值合理", bg: "#fef3c7", fg: "#854d0e" },
@@ -90606,7 +90721,7 @@ function listReports() {
     return acc;
   }, []).sort((a2, b2) => b2.mtime - a2.mtime);
 }
-function saveReport(code, name, fetchedAt, pack, buffett, duan, judgeRaw, judgeObj) {
+function saveReport(code, name, fetchedAt, pack, buffett, duan, judgeRaw, judgeObj, llmMeta) {
   const date = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   if (!node_fs.existsSync(REPORTS_DIR)) node_fs.mkdirSync(REPORTS_DIR, { recursive: true });
   const md = [
@@ -90685,7 +90800,8 @@ function saveReport(code, name, fetchedAt, pack, buffett, duan, judgeRaw, judgeO
         buffett,
         duan,
         judgeRaw,
-        judgeObj
+        judgeObj,
+        llm_meta: llmMeta ?? null
       }, null, 2),
       "utf-8"
     );
@@ -90820,15 +90936,27 @@ electron.ipcMain.handle("ask", async (event, code) => {
     pe_percentile: pack.historicalPE?.pe_percentile ?? null
   });
   send("ask:status", { phase: "buffett", text: "🧠 巴菲特正在思考..." });
-  let buffett = "";
-  buffett = await runMasterStream({ master: "buffett", data: pack }, (delta, phase) => {
+  const buffettResult = await runMasterStream({ master: "buffett", data: pack }, (delta, phase) => {
     send("ask:chunk", { master: "buffett", phase, delta });
   });
+  const buffett = buffettResult.text;
+  if (buffettResult.meta.truncated) {
+    send("ask:warn", {
+      master: "buffett",
+      msg: `⚠️ 巴菲特原文在 ${buffettResult.meta.max_tokens_used} tokens 预算下被截断（已自动重试${buffettResult.meta.retried_on_length ? "并扩容" : ""}），请查看 meta 文件。`
+    });
+  }
   send("ask:status", { phase: "duan", text: "🧠 段永平正在思考..." });
-  let duan = "";
-  duan = await runMasterStream({ master: "duan", data: pack }, (delta, phase) => {
+  const duanResult = await runMasterStream({ master: "duan", data: pack }, (delta, phase) => {
     send("ask:chunk", { master: "duan", phase, delta });
   });
+  const duan = duanResult.text;
+  if (duanResult.meta.truncated) {
+    send("ask:warn", {
+      master: "duan",
+      msg: `⚠️ 段永平原文在 ${duanResult.meta.max_tokens_used} tokens 预算下被截断（已自动重试${duanResult.meta.retried_on_length ? "并扩容" : ""}），请查看 meta 文件。`
+    });
+  }
   send("ask:status", { phase: "judge", text: "⚖️ 综合裁判汇总打分..." });
   let judgeRaw = "";
   let judgeObj = null;
@@ -90857,7 +90985,10 @@ electron.ipcMain.handle("ask", async (event, code) => {
       }
     };
   }
-  const { mdPath, htmlPath } = saveReport(code, name, pack.fetched_at, pack, buffett, duan, judgeRaw, judgeObj);
+  const { mdPath, htmlPath } = saveReport(code, name, pack.fetched_at, pack, buffett, duan, judgeRaw, judgeObj, {
+    buffett: buffettResult.meta,
+    duan: duanResult.meta
+  });
   send("ask:judge", { judge: judgeObj });
   send("ask:status", { phase: "done", text: "✓ 完成", path: htmlPath, mdPath });
   return { path: htmlPath, mdPath };

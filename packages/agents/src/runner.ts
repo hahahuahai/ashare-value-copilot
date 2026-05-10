@@ -7,8 +7,20 @@
  *   4. 不做工具回调（MVP 阶段），未来 W3 加入 tool_calls 让 Agent 主动取数
  */
 import type { DataPack } from "@vc/data";
-import { complete, completeStream, completeMasterStream } from "./llm.js";
+import {
+  complete,
+  completeStream,
+  completeMasterStream,
+  type CompletionMeta,
+} from "./llm.js";
 import { loadPrompt, type Master } from "./prompts.js";
+
+export type { CompletionMeta } from "./llm.js";
+
+export interface MasterResult {
+  text: string;
+  meta: CompletionMeta;
+}
 
 export interface RunArgs {
   master: Master;
@@ -54,20 +66,26 @@ function buildMessages(_master: Master, data: DataPack, system: string) {
 
 export async function runMaster({ master, data }: RunArgs): Promise<string> {
   const system = await loadPrompt(master);
-  return complete(buildMessages(master, data, system), { temperature: 0.3 });
+  // v0.1.15：非流式也用 16384 统一预算（默认 currentMaxTokens 已调至 16384）
+  return complete(buildMessages(master, data, system), {
+    temperature: 0.3,
+    maxTokens: 16384,
+  });
 }
 
 /** 流式版：onChunk 收到 phase=thinking|answer 的增量。
  *  使用 completeMasterStream 以容错"流式只回 reasoning"的思考型模型。
- *  v0.1.9：显式 maxTokens=8192（默认 4096 不够装完整三段式 + 结论）。 */
+ *  v0.1.15：
+ *   - 统一 maxTokens=16384（之前 8192 仍有被 reasoning 吃爆风险）
+ *   - 返回 { text, meta }，meta 携带 finish_reason/truncated/retried_* 供上层落盘 */
 export async function runMasterStream(
   { master, data }: RunArgs,
   onChunk: (delta: string, phase: "thinking" | "answer") => void,
-): Promise<string> {
+): Promise<MasterResult> {
   const system = await loadPrompt(master);
   return completeMasterStream(buildMessages(master, data, system), onChunk, {
     temperature: 0.3,
-    maxTokens: 8192,
+    maxTokens: 16384,
     agentName: master,
   });
 }

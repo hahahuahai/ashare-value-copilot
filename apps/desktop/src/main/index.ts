@@ -130,6 +130,7 @@ function saveReport(
   duan: string,
   judgeRaw: string,
   judgeObj: any,
+  llmMeta?: { buffett?: any; duan?: any },
 ): { mdPath: string; htmlPath: string } {
   const date = new Date().toISOString().slice(0, 10);
   if (!existsSync(REPORTS_DIR)) mkdirSync(REPORTS_DIR, { recursive: true });
@@ -219,6 +220,7 @@ function saveReport(
         duan,
         judgeRaw,
         judgeObj,
+        llm_meta: llmMeta ?? null,
       }, null, 2),
       "utf-8",
     );
@@ -394,16 +396,28 @@ ipcMain.handle("ask", async (event, code: string) => {
   });
 
   send("ask:status", { phase: "buffett", text: "🧠 巴菲特正在思考..." });
-  let buffett = "";
-  buffett = await runMasterStream({ master: "buffett", data: pack }, (delta, phase) => {
+  const buffettResult = await runMasterStream({ master: "buffett", data: pack }, (delta, phase) => {
     send("ask:chunk", { master: "buffett", phase, delta });
   });
+  const buffett = buffettResult.text;
+  if (buffettResult.meta.truncated) {
+    send("ask:warn", {
+      master: "buffett",
+      msg: `⚠️ 巴菲特原文在 ${buffettResult.meta.max_tokens_used} tokens 预算下被截断（已自动重试${buffettResult.meta.retried_on_length ? "并扩容" : ""}），请查看 meta 文件。`,
+    });
+  }
 
   send("ask:status", { phase: "duan", text: "🧠 段永平正在思考..." });
-  let duan = "";
-  duan = await runMasterStream({ master: "duan", data: pack }, (delta, phase) => {
+  const duanResult = await runMasterStream({ master: "duan", data: pack }, (delta, phase) => {
     send("ask:chunk", { master: "duan", phase, delta });
   });
+  const duan = duanResult.text;
+  if (duanResult.meta.truncated) {
+    send("ask:warn", {
+      master: "duan",
+      msg: `⚠️ 段永平原文在 ${duanResult.meta.max_tokens_used} tokens 预算下被截断（已自动重试${duanResult.meta.retried_on_length ? "并扩容" : ""}），请查看 meta 文件。`,
+    });
+  }
 
   send("ask:status", { phase: "judge", text: "⚖️ 综合裁判汇总打分..." });
   let judgeRaw = "";
@@ -435,7 +449,10 @@ ipcMain.handle("ask", async (event, code: string) => {
     };
   }
 
-  const { mdPath, htmlPath } = saveReport(code, name, pack.fetched_at, pack, buffett, duan, judgeRaw, judgeObj);
+  const { mdPath, htmlPath } = saveReport(code, name, pack.fetched_at, pack, buffett, duan, judgeRaw, judgeObj, {
+    buffett: buffettResult.meta,
+    duan: duanResult.meta,
+  });
   send("ask:judge", { judge: judgeObj });
   send("ask:status", { phase: "done", text: "✓ 完成", path: htmlPath, mdPath });
   return { path: htmlPath, mdPath };
