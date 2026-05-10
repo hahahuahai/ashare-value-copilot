@@ -20,6 +20,32 @@
 
 ---
 
+## [0.1.16] - 2026-05-10
+
+### Added
+- **多 LLM Provider 全面扩展（4 → 13 家）**：桌面端设置面板新增 9 家 OpenAI 兼容 provider 预设
+  - 中国大陆直连：阿里 DashScope（通义千问）、智谱 GLM、月之暗面 Kimi、字节豆包（火山方舟）、硅基流动 SiliconFlow
+  - 海外聚合：OpenRouter（含 Claude / Gemini / GPT 等数百模型）、xAI Grok、OpenAI 官方
+  - 离线本地：Ollama
+  - 每家含 base_url、推荐模型清单、申请 Key 链接、使用提示
+- **README 顶部动态徽章**：`Latest Release / Release Date / Total Downloads`（shields.io 实时拉 GitHub）
+- **README 新增「支持的 LLM Provider」章节**：13 行表格对比 + 「选哪个」三句话决策（性价比 / 质量 / 隐私）+ CLI `.env` 三个范例
+- **Provider 自检脚本**：`scripts/verify-providers.mjs` + `pnpm verify:providers` 命令
+  - 13 家并发探测 `/chat/completions` 发 "ping"，15s 超时
+  - 表格输出 ✓ PASS / ✗ FAIL + 耗时 + 错误片段
+  - 未填 key 的 provider 自动 skip，零依赖（node 内置 fetch）
+- **`.env.providers.test.example`**：自检脚本配置模板（首次运行自动生成），`.env.providers.test` 已 gitignore
+
+### Changed
+- `apps/desktop/package.json` 版本号 `0.1.15` → `0.1.16`
+- `apps/desktop/src/renderer/src/SettingsModal.tsx`：`Provider` union 类型 4 → 13，`PROVIDERS` 数组扩展，`detectProvider` base_url 匹配规则同步扩展（含 ollama 三种 localhost 形式）
+- `.gitignore`：新增 `apps/desktop/out/`（清理 112552 行已跟踪构建产物）+ `.env.providers.test`
+
+### Notes
+- Anthropic Claude / Google Gemini 原生协议不兼容 OpenAI，README 已明确建议走 OpenRouter 或 LiteLLM 转译；原生适配排期 v0.2
+
+---
+
 ## [0.1.15] - 2026-05-10
 
 ### Fixed
