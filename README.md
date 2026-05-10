@@ -4,7 +4,7 @@
 >
 > **ai-hedge-fund 教你做对冲基金，价投合伙人教你少做交易。**
 
-![status](https://img.shields.io/badge/status-MVP-orange) ![version](https://img.shields.io/badge/desktop-v0.1.13-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Mac-lightgrey)
+![status](https://img.shields.io/badge/status-MVP-orange) ![version](https://img.shields.io/badge/desktop-v0.1.14-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
 > ⚠️ **当前状态：MVP，私人仓库，尚未公开发布。** 功能可用但没跑过大规模样本，不要用来实盘下单。
 
@@ -26,7 +26,7 @@
 - 📐 **反幻觉**：所有数字必须来自 tool call（akshare 实时查询），禁止 LLM 自算
 - 🧪 **AI 复核员**：每份报告由独立的复核 Agent 对照原文扫引用、扫矛盾、扫估值跳跃，产出 issues 清单
 - 🖥️ **桌面端**：Electron 打包，Windows NSIS / Portable 双发行，连 Python 都不用装
-- 🔑 **自带 API Key**：OpenAI 兼容协议，支持腾讯云 LKEAP / DeepSeek / Ollama
+- 🔑 **自带 API Key**：OpenAI 兼容协议，支持腾讯云 LKEAP（含 Token Plan 思考型套餐）/ DeepSeek / Ollama。Token Plan 模型记得把 `LLM_MAX_TOKENS` 拉到 4096，思考链很费 token
 
 ---
 
@@ -34,11 +34,12 @@
 
 ### A. 桌面端（推荐 · 给"只想点按钮的你"）
 
-1. 去 [Releases](#)（暂未发布）下载 `价投合伙人 Setup 0.1.x.exe` 或 `价投合伙人 0.1.x Portable.exe`
-2. 首次启动填 `LLM_BASE_URL / API_KEY / MODEL`（支持 LKEAP / DeepSeek / 本地 Ollama）
-3. 输入股票代码，点「跑」→ 得到三段式 HTML 报告 + AI 复核结论
+1. 去 [Releases](#)（暂未发布）下载 `价投合伙人-0.1.x-x64.exe`（NSIS 安装版）或 `价投合伙人-0.1.x-portable.exe`（免安装版）
+2. **本地需装 Python 3.10+**（数据边车用 akshare，桌面端会自动启 sidecar 子进程）
+3. 首次启动填 `LLM_BASE_URL / API_KEY / MODEL`（支持 LKEAP / DeepSeek / 本地 Ollama）
+4. 输入股票代码，点「跑」→ 得到三段式 HTML 报告 + AI 复核结论
 
-内置数据边车（不需要自己启 Python）。
+桌面端把 prompts 和 sidecar 源码都打进了安装包，但 Python 解释器需要你自己有。
 
 ### B. CLI（给开发者）
 
@@ -84,7 +85,8 @@ pnpm ask 601318             # 中国平安
        ▼
 ┌─────────────────────────────────────────────────────────┐
 │  services/data-sidecar  (Python + akshare)              │
-│    /quote /fin /industry /capital_flow ...              │
+│    /quote /profile /financial /valuation                │
+│    /dividend /historical-pe /industry-compare /healthz  │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -122,8 +124,9 @@ pnpm ask 601318             # 中国平安
 - [x] **W2** judge 合议员 + HTML 报告
 - [x] **W2** Electron 桌面端（NSIS / Portable）
 - [x] **W2** AI 复核员（reviewer）+ 失败自动重试 + JSON 截断抢救
-- [ ] **W3** 芒格 Agent + 三方圆桌辩论
 - [ ] **W3** 批量跑 5 支样例（茅台 / 平安 / 福耀 / 海天 / 五粮液）
+- [ ] **W3** 芒格 Agent + 三方圆桌辩论
+- [ ] **W4** reviewer 结果落 `meta.json`，方便后续做复核质量追踪
 - [ ] **W4** 能力圈档案（SQLite）+ 持仓周报 + 企微推送
 - [ ] **W5** Web UI（React Flow 可视化合议链路）
 - [ ] **W6** 公开发布 + 公众号推介

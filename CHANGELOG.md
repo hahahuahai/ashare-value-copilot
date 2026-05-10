@@ -6,11 +6,14 @@
 
 桌面端版本见 `apps/desktop/package.json`；项目级里程碑以 W1 / W2 … 周为单位。
 
+> ⚠️ 本仓库 `d25e205` 才首次提交（initial commit 即 v0.1.13），更早的 0.1.0 ~ 0.1.12 仅在本地迭代，没有公开 commit。下方仅记录有 commit 可追溯的版本。
+
 ---
 
 ## [Unreleased]
 
 ### Planned
+- reviewer 结果落进 `reports/*.meta.json`（目前 meta 只存 buffett/duan/judge）
 - 芒格 Agent，三方圆桌辩论
 - 5 支样例批量跑（茅台 / 平安 / 福耀 / 海天 / 五粮液）
 - 能力圈档案（SQLite）+ 持仓周报 + 企微推送
@@ -25,56 +28,40 @@
 - **apps/desktop render-report.ts**：verdictBadge 映射同时接受 `skip` 和 legacy `pass`，老报告零破坏
 
 ### Added
-- `.gitattributes`：默认 `* text=auto eol=lf`，`.bat/.cmd/.ps1` 保留 CRLF，二进制文件标记 `binary`，治理 Windows CRLF 警告
-- `LICENSE`（MIT）+ 附加免责声明
+- `.gitattributes`：默认 `* text=auto eol=lf`，`.bat/.cmd/.ps1` 保留 CRLF，二进制文件标 `binary`，治理 Windows CRLF 警告
+- `LICENSE`（MIT + 投资免责附加声明）
 - `CHANGELOG.md`（本文件）
-- `README.md` 精修：反映桌面端 / 复核员 / verdict 枚举 / 架构图等当前真实状态
+- `README.md` 精修：反映桌面端 / 复核员 / verdict 枚举 / 真实 sidecar endpoints
 
 ### Fixed
 - `prompts/reviewer.md` 第 34-35 行遗留的废弃 verdict `fit_buy` → `worth_research`
 
 ### Chore
 - 初始化 GitHub Private 仓库（`hahahuahai/ashare-value-copilot`），脱敏 `RUN.md` 中的 LKEAP 引用
+- `apps/desktop/package.json` 版本号 `0.1.13` → `0.1.14`，打 NSIS + Portable 双包
 
 ---
 
 ## [0.1.13] - 2026-05-10
 
-### Added
-- **AI 复核员（reviewer）**：独立上下文 Agent，对照原文扫引用不符 / 数字矛盾 / 估值跳跃，产出 `issues[] + overall + verdict`
-- 复核失败自动重试 + JSON 截断三级抢救（brace-depth 扫 overall + issues 数组）
-- HTML 报告尾部嵌入复核卡片（issues 折叠 + overall 摘要 + verdict badge）
-- `reports/*.meta.json` 落盘，保存 scores / verdict / OCF-NP / reviewer 结构化结果
+> 仓库的 initial commit（`d25e205`），已包含下列功能。
 
-### Changed
-- Electron 桌面端一键跑流程打通：表单 → runner → judge → reviewer → HTML 渲染 → 自动打开
-
----
-
-## [0.1.10] - 2026-05-09
-
-### Added
-- judge 合议员：对巴菲特 + 段永平两段输出做加权合议，产出 `verdict + scores (business/moat/price) + OCF/NetProfit 质量比`
-- HTML 报告模板（三段式 + judge 卡片 + 免责声明）
-- electron-builder NSIS + Portable 双发行配置
-
----
-
-## [0.1.0] - 2026-05-08
-
-### Added
-- 首次端到端跑通：CLI `pnpm ask 600519` → 数据边车 → 巴菲特 + 段永平 Agent → Markdown 报告
-- `services/data-sidecar`：Python + akshare，暴露 `/quote /fin /industry /capital_flow` 等接口
-- `packages/agents`：OpenAI 兼容 runner + tool calling
-- `prompts/buffett.md` + `prompts/duan.md`：双大师人格 v0，强制 `PASS / FAIL / GRAY` 三段式输出
-- 能力圈门禁：看不懂的生意直接拒绝分析
-- 反幻觉铁律：所有数字必须来自 tool call
+### Features (initial commit 已带)
+- **数据边车**：Python + akshare HTTP 服务，端口 9876，暴露 `/quote /profile /financial /valuation /dividend /historical-pe /industry-compare /healthz`
+- **巴菲特 + 段永平双 Agent**：强制 `PASS / FAIL / GRAY` 三段式输出，能力圈门禁，反幻觉铁律（数字必须来自 tool call）
+- **judge 合议员**：对两段输出做加权合议，产出 `verdict + scores (business/moat/price) + OCF/NetProfit 质量比`
+- **AI 复核员（reviewer）**：独立上下文 Agent，对照原文扫引用 / 矛盾 / 估值跳跃，产出 `issues[] + overall + verdict`，失败自动重试 + JSON 截断三级抢救
+- **CLI**：`pnpm ask <code>` / `pnpm ping`
+- **Electron 桌面端**：electron-vite + electron-builder，NSIS + Portable 双发行
+- **HTML 报告**：三段式 + judge 卡片 + reviewer 卡片 + 免责声明
+- **`reports/*.meta.json`**：保存 `buffett_len / duan_len / judge_obj`（reviewer 暂未写入）
+- **prompts 单一真相源**：`prompts/{buffett,duan,judge,reviewer}.md`，桌面端通过 `extraResources` 打包
 
 ---
 
 ## 版本号约定
 
-- **0.0.x** — 原型期，接口随意改
+- **0.0.x** — 原型期，接口随意改（无 commit 留存）
 - **0.1.x** — MVP 期（当前阶段），单人自用，向后兼容在"尽量不破坏老报告"范围内努力
 - **0.x.y** — 公开发布前，功能迭代
 - **1.0.0** — 首次公开发布，锁定 prompt 接口 + 报告 schema
