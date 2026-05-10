@@ -1,0 +1,83 @@
+{
+  "name": "@vc/desktop",
+  "version": "0.1.13",
+  "private": true,
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "pack": "electron-vite build && electron-builder --dir",
+    "dist": "electron-vite build && electron-builder",
+    "dist:portable": "electron-vite build && electron-builder --win portable",
+    "dist:nsis": "electron-vite build && electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.huahai.ashare-value-copilot",
+    "productName": "价投合伙人",
+    "copyright": "Copyright © 2026 huahai",
+    "asar": true,
+    "directories": {
+      "output": "dist",
+      "buildResources": "resources"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../prompts",
+        "to": "prompts",
+        "filter": ["**/*.md"]
+      },
+      {
+        "from": "../../services",
+        "to": "services",
+        "filter": ["**/*.py", "**/*.txt"]
+      }
+    ],
+    "win": {
+      "icon": "resources/icon.ico",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "价投合伙人",
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    }
+  },
+  "dependencies": {
+    "@vc/agents": "workspace:*",
+    "@vc/data": "workspace:*",
+    "openai": "^4.67.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "electron": "^28.3.3",
+    "electron-builder": "^25.0.0",
+    "electron-vite": "^2.3.0",
+    "postcss": "^8.4.41",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.1",
+    "remark-gfm": "^4.0.0",
+    "tailwindcss": "^3.4.10",
+    "vite": "^5.4.0"
+  }
+}

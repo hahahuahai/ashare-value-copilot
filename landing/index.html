@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>价投合伙人 · A-Share Value Council</title>
+<style>
+  :root{
+    --bg:#0f1115;
+    --bg-soft:#151821;
+    --ink:#e8eaed;
+    --ink-dim:#9aa0a6;
+    --accent:#e63946;     /* 中国红：价投 */
+    --accent-2:#f1c40f;   /* 茅台金 */
+    --line:#2a2f3a;
+    --mono:"JetBrains Mono","SFMono-Regular",Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+
+  /* nav */
+  nav{padding:20px 0;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(15,17,21,.9);backdrop-filter:blur(8px);z-index:10}
+  nav .row{display:flex;justify-content:space-between;align-items:center}
+  .logo{font-weight:700;font-size:18px;letter-spacing:.5px}
+  .logo span{color:var(--accent)}
+  nav ul{display:flex;gap:28px;list-style:none;font-size:14px;color:var(--ink-dim)}
+  nav ul a:hover{color:var(--ink);text-decoration:none}
+
+  /* hero */
+  .hero{padding:120px 0 80px;text-align:center}
+  .tag{display:inline-block;padding:6px 14px;border:1px solid var(--line);border-radius:999px;font-size:12px;color:var(--ink-dim);margin-bottom:24px}
+  .tag b{color:var(--accent-2)}
+  h1{font-size:52px;line-height:1.2;font-weight:800;letter-spacing:-1px;margin-bottom:20px}
+  h1 em{font-style:normal;color:var(--accent);border-bottom:3px solid var(--accent)}
+  .subtitle{font-size:20px;color:var(--ink-dim);max-width:680px;margin:0 auto 12px}
+  .anti-slogan{margin:28px auto 40px;font-family:var(--mono);color:var(--ink-dim);font-size:14px;max-width:560px}
+  .anti-slogan del{color:#555}
+  .anti-slogan b{color:var(--accent-2)}
+  .cta{display:inline-flex;gap:12px;align-items:center;justify-content:center}
+  .btn{padding:14px 28px;border-radius:10px;font-size:15px;font-weight:600;display:inline-flex;align-items:center;gap:8px;transition:transform .1s}
+  .btn:hover{transform:translateY(-1px);text-decoration:none}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-ghost{border:1px solid var(--line);color:var(--ink)}
+
+  /* code block */
+  .terminal{max-width:720px;margin:56px auto 0;background:#0a0c10;border:1px solid var(--line);border-radius:12px;overflow:hidden;text-align:left;font-family:var(--mono);font-size:13px}
+  .terminal .bar{background:#14161c;padding:10px 14px;color:var(--ink-dim);font-size:12px;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--line)}
+  .dot{width:10px;height:10px;border-radius:50%;background:#3a3f4b}
+  .terminal pre{padding:20px 24px;color:#b9c1cc;white-space:pre-wrap;line-height:1.8}
+  .terminal .prompt{color:var(--accent)}
+  .terminal .ok{color:#4ade80}
+  .terminal .fail{color:#f87171}
+  .terminal .gray{color:#fbbf24}
+  .terminal .dim{color:#6b7280}
+
+  /* sections */
+  section{padding:80px 0}
+  .sec-title{font-size:14px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:3px;margin-bottom:16px;text-align:center}
+  .sec-head{font-size:34px;font-weight:800;text-align:center;margin-bottom:56px;letter-spacing:-.5px}
+  .sec-head em{font-style:normal;color:var(--accent)}
+
+  /* three masters */
+  .masters{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .card{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:28px 24px;transition:border-color .15s}
+  .card:hover{border-color:var(--accent)}
+  .card h3{font-size:20px;margin-bottom:6px}
+  .card .en{font-family:var(--mono);font-size:12px;color:var(--ink-dim);margin-bottom:16px}
+  .card p{color:var(--ink-dim);font-size:14px;margin-bottom:12px}
+  .card .quote{color:var(--accent-2);font-size:13px;border-left:2px solid var(--accent-2);padding-left:10px;margin-top:16px}
+
+  /* diff table */
+  .compare{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .compare table{width:100%;border-collapse:collapse}
+  .compare th,.compare td{padding:16px 20px;text-align:left;border-bottom:1px solid var(--line);font-size:14px;vertical-align:top}
+  .compare th{background:var(--bg-soft);color:var(--ink-dim);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:1px}
+  .compare tr:last-child td{border-bottom:0}
+  .compare td.us{color:var(--ink-dim)}
+  .compare td.us b{color:#ef4444}
+  .compare td.them b{color:#f87171}
+  .compare td.mine{color:var(--ink)}
+  .compare td.mine b{color:#4ade80}
+
+  /* features */
+  .feats{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+  .feat{background:var(--bg-soft);border:1px solid var(--line);border-radius:12px;padding:24px}
+  .feat h4{font-size:16px;margin-bottom:8px}
+  .feat h4 span{color:var(--accent);font-family:var(--mono);margin-right:8px}
+  .feat p{color:var(--ink-dim);font-size:14px}
+
+  /* roadmap */
+  .roadmap{max-width:680px;margin:0 auto}
+  .week{display:flex;gap:20px;padding:18px 0;border-bottom:1px dashed var(--line)}
+  .week:last-child{border-bottom:0}
+  .week .w{font-family:var(--mono);color:var(--accent);font-weight:700;min-width:60px}
+  .week .t{color:var(--ink)}
+  .week .d{color:var(--ink-dim);font-size:13px;margin-left:auto}
+  .week.done .t{color:var(--ink-dim);text-decoration:line-through}
+  .week.now{background:rgba(230,57,70,.05);border-left:3px solid var(--accent);padding-left:16px;margin-left:-19px;border-radius:0 6px 6px 0}
+
+  /* footer */
+  footer{padding:48px 0 32px;border-top:1px solid var(--line);color:var(--ink-dim);font-size:13px;text-align:center}
+  footer .warn{max-width:720px;margin:0 auto 16px;padding:14px;border:1px dashed #5a3a3a;border-radius:8px;color:#fbbf24;font-size:12px;line-height:1.7}
+
+  @media (max-width:760px){
+    h1{font-size:34px}
+    .subtitle{font-size:16px}
+    .masters,.feats{grid-template-columns:1fr}
+    nav ul{display:none}
+    .compare table{font-size:12px}
+    .compare th,.compare td{padding:12px}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap row">
+    <div class="logo">价投<span>·</span>合伙人</div>
+    <ul>
+      <li><a href="#masters">大师委员会</a></li>
+      <li><a href="#compare">和别人的区别</a></li>
+      <li><a href="#features">核心能力</a></li>
+      <li><a href="#roadmap">路线图</a></li>
+      <li><a href="#">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="tag">🇨🇳 A 股专属 · 中文大师人格 · 开源 · <b>用你自己的 API Key</b></div>
+    <h1>你的 A 股研究，<br/>让<em>巴菲特和段永平</em>先吵一架。</h1>
+    <p class="subtitle">一个开源的本地 AI 投研合伙人。把"好生意 / 好公司 / 好价格"<br/>编码进价投大师 Agent，替你做尽调、出三段式报告、写持仓周报。</p>
+    <p class="anti-slogan">
+      <del>ai-hedge-fund 教你做对冲基金</del><br/>
+      <b>价投合伙人</b> 教你<b>少做交易</b>。
+    </p>
+
+    <div class="cta">
+      <a class="btn btn-primary" href="#">⭐ Star on GitHub</a>
+      <a class="btn btn-ghost" href="#demo">▶ 看一段示例分析</a>
+    </div>
+
+    <div class="terminal" id="demo">
+      <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>&nbsp;&nbsp;value-council — 研究 600519 贵州茅台</div>
+<pre>
+<span class="prompt">$</span> value-council ask 600519
+
+<span class="dim">🔍 正在调用 akshare 拉取十年财报...</span>
+<span class="dim">🧠 Buffett Agent 正在思考...</span>
+
+<span class="ok">【巴菲特】</span>
+能力圈：IN_CIRCLE — 卖高端白酒，客户愿意为面子和社交支付溢价。
+好生意：<span class="ok">PASS</span> — 品牌护城河极深，定价权每年体现。
+好公司：<span class="ok">PASS</span> — ROE 十年均值 30%+，现金流 / 净利润 1.0+。
+好价格：<span class="gray">GRAY</span> — PE 27，不贵但也谈不上便宜。
+一句话：<span class="dim">"我愿意持有十年，但不会为它付任何价格。"</span>
+
+<span class="ok">【段永平】</span>
+我懂不懂：<span class="ok">懂</span> — 中国人请客，茅台是硬通货。
+商业本质：<span class="ok">PASS</span> — 多一个对手也撼不动，品牌是时间换的。
+Stop Doing：<span class="ok">PASS</span> — 不靠补贴，不烧钱，管理层本分。
+不贵就行：<span class="gray">GRAY</span> — 不便宜，但这个公司几乎不会贵。
+一句话：<span class="dim">"本分公司，等等看。"</span>
+
+<span class="ok">【委员会结论】</span> 2 PASS · 0 FAIL · 2 GRAY  →  <b>继续观察，等更好的价格</b>
+<span class="dim">报告已写入 ~/value-council/reports/600519-2026-05-10.md</span>
+<span class="dim">⚠️ 本工具不给买卖建议。所有数字来自 akshare tool call，拒绝 LLM 自算。</span>
+</pre>
+    </div>
+  </div>
+</header>
+
+<section id="masters">
+  <div class="wrap">
+    <div class="sec-title">Committee</div>
+    <h2 class="sec-head">一个永远在<em>吵架</em>的大师委员会</h2>
+    <div class="masters">
+
+      <div class="card">
+        <h3>巴菲特 · 乐观派守门员</h3>
+        <div class="en">Warren Buffett Agent</div>
+        <p>负责"好生意 / 好公司 / 好价格"三段式。看护城河、ROE、现金流匹配。默认偏乐观。</p>
+        <div class="quote">"如果你不愿持有十年，就一分钟都别持有。"</div>
+      </div>
+
+      <div class="card">
+        <h3>段永平 · 能力圈门神</h3>
+        <div class="en">Duan Yongping Agent</div>
+        <p>第一道门槛。用大白话拷问"商业本质三问"。看不懂直接 FAIL，不装懂。</p>
+        <div class="quote">"这个我不懂，我不碰。本分。"</div>
+      </div>
+
+      <div class="card">
+        <h3>芒格 · 反向否决员</h3>
+        <div class="en">Charlie Munger Agent</div>
+        <p>只找否决的理由。反向思考、失败清单、复杂系统。唱反调是他的工作。<br/><span style="color:var(--ink-dim);font-size:12px">· 第二阶段上线</span></p>
+        <div class="quote">"如果我知道我会死在哪里，我就永远不去那里。"</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section id="compare">
+  <div class="wrap">
+    <div class="sec-title">Why not the others</div>
+    <h2 class="sec-head">市面上的方案，都<em>不对味</em></h2>
+    <div class="compare">
+      <table>
+        <thead>
+          <tr><th>维度</th><th>ai-hedge-fund (51k★)</th><th>通用 ChatGPT / 财经大模型</th><th>价投合伙人</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>市场覆盖</td>
+            <td class="us"><b>只有美股</b>，数据 API 付费</td>
+            <td class="them"><b>会瞎编 A 股数据</b></td>
+            <td class="mine"><b>A 股原生</b>，akshare 免费</td>
+          </tr>
+          <tr>
+            <td>投资哲学</td>
+            <td class="us">对冲基金 / 短期信号 / 19 大师全喊买</td>
+            <td class="them">无立场，讨好用户</td>
+            <td class="mine"><b>价投 / 长期 / 默认劝你别买</b></td>
+          </tr>
+          <tr>
+            <td>数字可信度</td>
+            <td class="us">数据源透明但付费</td>
+            <td class="them"><b>严重幻觉</b>，数字不可信</td>
+            <td class="mine">Decimal 精度 · Benford 异常检测 · <b>强制 tool call 来源</b></td>
+          </tr>
+          <tr>
+            <td>大师人格</td>
+            <td class="us">英文人格，西方视角</td>
+            <td class="them">没有人格</td>
+            <td class="mine"><b>中文大师</b>：段永平 · 李录 · 价投本土语境</td>
+          </tr>
+          <tr>
+            <td>能力圈约束</td>
+            <td class="us">无，看啥分析啥</td>
+            <td class="them">无</td>
+            <td class="mine"><b>能力圈门禁</b>：看不懂就拒绝分析</td>
+          </tr>
+          <tr>
+            <td>成本 / 锁定</td>
+            <td class="us">绑付费数据 API</td>
+            <td class="them">按 token 付费</td>
+            <td class="mine"><b>自带 API Key</b> · 支持 DeepSeek / 腾讯云 LKEAP / Ollama 本地</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="sec-title">Features</div>
+    <h2 class="sec-head">不是一个聊天机器人，<em>是一个工作流</em></h2>
+    <div class="feats">
+      <div class="feat"><h4><span>01</span>三段式尽调报告</h4><p>好生意 / 好公司 / 好价格，每段强制 PASS / FAIL / GRAY，不允许"也许可以考虑"的模糊结论。</p></div>
+      <div class="feat"><h4><span>02</span>多 Agent 圆桌辩论</h4><p>巴菲特 vs 段永平 vs 芒格，观点冲突必须显式呈现。你读到的是争论，不是共识灌输。</p></div>
+      <div class="feat"><h4><span>03</span>能力圈档案</h4><p>本地 SQLite 记录你"真懂的生意"。每次分析先问你"能 30 字讲清它吗"，答不出就拒绝分析。</p></div>
+      <div class="feat"><h4><span>04</span>持仓周报</h4><p>自动读取你的持仓，每周生成三段式复盘。可推送到企微 / Telegram / Obsidian Vault。</p></div>
+      <div class="feat"><h4><span>05</span>反幻觉防线</h4><p>Decimal 精度财务计算 · Benford's Law 异常检测 · 多源交叉验证 · 强制 tool call 数据来源。</p></div>
+      <div class="feat"><h4><span>06</span>本地优先</h4><p>所有数据留本地，持仓数据从不离开你的电脑。支持 Ollama 纯本地运行，无 API 焦虑。</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="wrap">
+    <div class="sec-title">Roadmap</div>
+    <h2 class="sec-head">6 周，从零到<em>可用 MVP</em></h2>
+    <div class="roadmap">
+      <div class="week now"><div class="w">W1</div><div class="t">数据层：akshare 边车 + Decimal 精度 + SQLite 缓存</div><div class="d">进行中</div></div>
+      <div class="week"><div class="w">W2</div><div class="t">Buffett Agent + 三段式报告输出</div><div class="d">—</div></div>
+      <div class="week"><div class="w">W3</div><div class="t">段永平 + 芒格 Agent · 三方圆桌辩论</div><div class="d">—</div></div>
+      <div class="week"><div class="w">W4</div><div class="t">能力圈档案 + 持仓周报 · 企微推送</div><div class="d">—</div></div>
+      <div class="week"><div class="w">W5</div><div class="t">Web UI · React Flow 可视化 · Vercel Live Demo</div><div class="d">—</div></div>
+      <div class="week"><div class="w">W6</div><div class="t">公开发布：GitHub / HN / V2EX / 雪球 同日</div><div class="d">—</div></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="warn">
+      ⚠️ <b>免责声明</b>：本工具是研究辅助，不是投顾服务。所有输出仅用于帮你<b>独立思考</b>，不构成任何买卖建议。<br/>
+      投资决策由你自己负责。工具默认劝你"别买"，因为大多数时候"不动"就是对的。
+    </div>
+    <div>© 2026 价投合伙人 · Open Source · MIT License</div>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "name": "value-council",
+  "version": "0.0.1",
+  "private": true,
+  "description": "A-Share Value Council — your open-source value-investing copilot.",
+  "type": "module",
+  "scripts": {
+    "sidecar": "python services/data-sidecar/main.py",
+    "ask": "tsx apps/cli/src/index.ts ask",
+    "ping": "tsx apps/cli/src/index.ts ping",
+    "build": "tsc -b",
+    "dev:cli": "tsx watch apps/cli/src/index.ts",
+    "desktop:dev": "pnpm --filter @vc/desktop dev",
+    "desktop:build": "pnpm --filter @vc/desktop build",
+    "desktop:dist": "pnpm --filter @vc/desktop build && cd apps/desktop && npx electron-builder",
+    "desktop:portable": "pnpm --filter @vc/desktop build && cd apps/desktop && npx electron-builder --win portable",
+    "desktop:nsis": "pnpm --filter @vc/desktop build && cd apps/desktop && npx electron-builder --win nsis"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4",
+    "@types/node": "^22.5.0"
+  },
+  "dependencies": {
+    "openai": "^4.67.0",
+    "zod": "^3.23.8",
+    "kleur": "^4.1.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@vc/cli",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "value-council": "./src/index.ts"
+  },
+  "dependencies": {
+    "@vc/agents": "workspace:*",
+    "@vc/data": "workspace:*",
+    "kleur": "^4.1.5"
+  }
+}

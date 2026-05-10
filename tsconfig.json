@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@vc/agents": ["packages/agents/src/index.ts"],
+      "@vc/data": ["packages/data/src/index.ts"]
+    }
+  },
+  "include": [
+    "apps/**/src/**/*",
+    "packages/**/src/**/*"
+  ]
+}
