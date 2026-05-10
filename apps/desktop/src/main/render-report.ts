@@ -84,7 +84,8 @@ function scoreColor(v: number | null | undefined): string {
 function verdictBadge(v?: string): string {
   const map: Record<string, { text: string; bg: string; fg: string }> = {
     worth_research: { text: "值得研究", bg: "#dcfce7", fg: "#166534" },
-    pass: { text: "暂时跳过", bg: "#fee2e2", fg: "#991b1b" },
+    skip: { text: "暂时跳过", bg: "#fee2e2", fg: "#991b1b" },
+    pass: { text: "暂时跳过", bg: "#fee2e2", fg: "#991b1b" }, // legacy alias，v0.1.14 起改用 skip
     out_of_competence: { text: "能力圈外", bg: "#e5e7eb", fg: "#374151" },
     cheap: { text: "偏低估", bg: "#dcfce7", fg: "#166534" },
     fair: { text: "估值合理", bg: "#fef3c7", fg: "#854d0e" },

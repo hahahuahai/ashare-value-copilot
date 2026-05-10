@@ -31,8 +31,8 @@
 报告内部的判断是否互相印证？
 
 典型问题：
-- judge.verdict = "fit_buy"，但三项 scores 里有 GRAY 或 value < 6。
-- one_liner 表达的情绪与 verdict 矛盾（"贵得离谱" + verdict=fit_buy）。
+- judge.verdict = "worth_research"，但三项 scores 里有 GRAY 或 value < 6。
+- one_liner 表达的情绪与 verdict 矛盾（"贵得离谱" + verdict=worth_research）。
 - 巴菲特 PASS、段永平 FAIL，但 one_liner 写"两位大师一致看好"。
 - 估值锚条标为"低于公允区间"，但 verdict 却是"贵"。
 - 风险项严重度（risks[].severity）含 "high"，但 scores.business 仍给 9 分。
@@ -54,6 +54,14 @@
 - **不要** 抠语法或措辞优雅度。你只盯：错没错、矛不矛盾、空不空泛。
 - **不要** 输出 issues 数量超过 8 条；优先级低的合并或丢弃。
 - **不要** 在 issues 里同时质疑同一处（同一句、同一数字）两次。
+
+## 输出长度硬约束（防截断 · v0.1.14 强化）
+
+- **issues 最多 5 条**：优先保留 severity=high，其次 medium，low 能丢就丢。
+- **每条 issue 三字段长度上限**：`quote ≤ 60 字`、`problem ≤ 60 字`、`suggestion ≤ 60 字`。超过会被下游解析器截断并导致 JSON 损坏。
+- **禁止 markdown**：issues 内禁止出现 `**` / `-` / 换行符，全部用单行普通文字。
+- **先写 overall，再写 issues**：JSON 字段顺序必须是 `overall` 在前、`issues` 在后；issues 可以少不可以没有，宁缺毋滥。
+- **JSON 必须完整闭合**：输出结尾必须是 `]}`，不允许截断。自查：如果 token 快用完，宁愿少写一条 issue，也不要留半条。
 
 ---
 

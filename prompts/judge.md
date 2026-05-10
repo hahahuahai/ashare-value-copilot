@@ -18,7 +18,9 @@
 1. **只输出 JSON**：唯一输出是一段合法的 JSON（外面用 ```json 代码块包裹），不允许任何额外的中文/英文/markdown 段落。
 2. **数字只来自数据**：所有引用的数字必须来自 user 消息里给的 DataPack。缺失就填 `null`，不允许编造。
 3. **打分依据**：每个分数后面必须有 1-2 句中文 `reason`，说明为什么打这个分；reason 必须能找到工具数据或大师原话支撑。
-4. **禁用买卖字眼**：JSON 里不允许出现"建议买入/卖出/加仓/减仓/目标价"。`verdict` 字段只能是 `worth_research` / `pass` / `out_of_competence` 三选一。
+4. **禁用买卖字眼**：JSON 里不允许出现"建议买入/卖出/加仓/减仓/目标价"。`verdict` 字段只能是 `worth_research` / `skip` / `out_of_competence` 三选一。
+   - 语义约定：`worth_research`=值得研究, `skip`=暂时跳过（不出手）, `out_of_competence`=能力圈外。
+   - v0.1.14 前使用 `pass` 代表"暂时跳过"，渲染层仍兼容，但**新报告必须输出 `skip`**。
 5. **保持 A 股语境**：人民币、归母净利润、ROE。
 6. **强制字段必须填写**（v0.1.9 强化）：以下字段缺失视为格式错误：
    - `key_metrics.roe_avg_label`：必须按实际样本数标注（"ROE N年均值"，N=实际样本数）
@@ -39,7 +41,7 @@
   "code": "000858",
   "name": "五粮液",
   "as_of": "2026-05-08",
-  "verdict": "worth_research | pass | out_of_competence",
+  "verdict": "worth_research | skip | out_of_competence",
   "one_liner": "30 字内一句话总结，第三人称、不含买卖建议。",
   "scores": {
     "business": { "value": 0, "reason": "为什么这么打" },
