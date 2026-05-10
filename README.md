@@ -110,6 +110,33 @@ LLM_MODEL=qwen2.5:14b
 
 > ⚠️ Anthropic Claude / Google Gemini 原生 API 协议不兼容 OpenAI，需要走 OpenRouter 或自建代理（如 [LiteLLM](https://github.com/BerriAI/litellm)）转译。原生适配将在 v0.2 评估。
 
+### 自检：怎么知道我配的 Provider 真能用？
+
+仓库自带一键自检脚本，用 `/chat/completions` 发一句 `ping` 探测每家：
+
+```bash
+# 1. 拷贝模板（首次运行会自动生成 .example）
+cp .env.providers.test.example .env.providers.test
+
+# 2. 把你有 key 的 provider 那行取消注释、填值（没填的会自动 skip）
+#    例：DEEPSEEK_KEY=sk-xxxxxxxx
+
+# 3. 跑！
+pnpm verify:providers
+```
+
+输出示例：
+
+```
+Provider              Model                       Status   Dur     Info
+-----------------------------------------------------------------------------
+LKEAP · Token Plan    glm-5.1                     ✓ PASS   1024ms  → ...
+DeepSeek 官方          deepseek-chat               ✓ PASS   780ms   → ping
+阿里 DashScope         qwen-turbo                  ✗ FAIL   401     Invalid API-key
+```
+
+`.env.providers.test` 已加入 `.gitignore`，不会污染仓库。
+
 ---
 
 ## 架构
