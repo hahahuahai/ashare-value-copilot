@@ -9,7 +9,20 @@ interface Props {
   forcedSetup?: boolean;
 }
 
-type Provider = "lkeap-plan" | "lkeap-std" | "deepseek" | "custom";
+type Provider =
+  | "lkeap-plan"
+  | "lkeap-std"
+  | "deepseek"
+  | "dashscope"
+  | "zhipu"
+  | "moonshot"
+  | "doubao"
+  | "siliconflow"
+  | "openrouter"
+  | "ollama"
+  | "openai"
+  | "grok"
+  | "custom";
 
 interface ProviderDef {
   id: Provider;
@@ -68,11 +81,135 @@ const PROVIDERS: ProviderDef[] = [
     ],
   },
   {
+    id: "dashscope",
+    name: "阿里通义千问",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    keyPrefix: "sk-",
+    applyUrl: "https://bailian.console.aliyun.com/?apiKey=1",
+    tip: "DashScope 的 OpenAI 兼容入口。中文金融语料强、tool call 稳定。",
+    models: [
+      { value: "qwen-max", label: "Qwen Max", hint: "通义千问旗舰" },
+      { value: "qwen-plus", label: "Qwen Plus", hint: "性价比平衡款" },
+      { value: "qwen-turbo", label: "Qwen Turbo", hint: "极速 · 低价" },
+      { value: "qwq-32b-preview", label: "QwQ 32B", hint: "深度推理 · 思考型" },
+    ],
+  },
+  {
+    id: "zhipu",
+    name: "智谱 GLM",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    keyPrefix: "",
+    applyUrl: "https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
+    tip: "智谱清言 API。GLM-4.6 性价比高，A 股研报训练料丰富。",
+    models: [
+      { value: "glm-4.6", label: "GLM-4.6", hint: "旗舰对话 · 推荐" },
+      { value: "glm-4-plus", label: "GLM-4-Plus", hint: "高质量 · 价格略高" },
+      { value: "glm-z1-air", label: "GLM-Z1-Air", hint: "深度思考 · 平价" },
+      { value: "glm-4-air", label: "GLM-4-Air", hint: "极速 · 低价" },
+    ],
+  },
+  {
+    id: "moonshot",
+    name: "月之暗面 Kimi",
+    baseUrl: "https://api.moonshot.cn/v1",
+    keyPrefix: "sk-",
+    applyUrl: "https://platform.moonshot.cn/console/api-keys",
+    tip: "Kimi 长上下文擅长，研报抓取与跨年度财报对比友好。",
+    models: [
+      { value: "moonshot-v1-128k", label: "Moonshot v1 128K", hint: "长上下文" },
+      { value: "moonshot-v1-32k", label: "Moonshot v1 32K", hint: "性价比" },
+      { value: "kimi-latest", label: "Kimi Latest", hint: "最新对话模型" },
+    ],
+  },
+  {
+    id: "doubao",
+    name: "字节豆包（火山方舟）",
+    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+    keyPrefix: "",
+    applyUrl: "https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey",
+    tip: "豆包速度极快、tool call 已稳。模型名需在火山方舟开通后填 endpoint id（ep-xxxxxxx）。",
+    models: [
+      { value: "doubao-1-5-pro-32k-250115", label: "Doubao 1.5 Pro 32K", hint: "旗舰 · 推荐" },
+      { value: "doubao-1-5-pro-256k-250115", label: "Doubao 1.5 Pro 256K", hint: "长上下文" },
+      { value: "doubao-1-5-lite-32k-250115", label: "Doubao 1.5 Lite", hint: "极速 · 低价" },
+    ],
+  },
+  {
+    id: "siliconflow",
+    name: "硅基流动 SiliconFlow",
+    baseUrl: "https://api.siliconflow.cn/v1",
+    keyPrefix: "sk-",
+    applyUrl: "https://cloud.siliconflow.cn/account/ak",
+    tip: "一个 Key 聚合 DeepSeek/Qwen/GLM 等多家模型，国内直连。",
+    models: [
+      { value: "deepseek-ai/DeepSeek-V3", label: "DeepSeek V3" },
+      { value: "deepseek-ai/DeepSeek-R1", label: "DeepSeek R1", hint: "深度推理" },
+      { value: "Qwen/Qwen2.5-72B-Instruct", label: "Qwen2.5 72B" },
+      { value: "Qwen/QwQ-32B", label: "QwQ 32B", hint: "思考型" },
+      { value: "THUDM/glm-4-9b-chat", label: "GLM-4 9B" },
+    ],
+  },
+  {
+    id: "openrouter",
+    name: "OpenRouter（海外聚合）",
+    baseUrl: "https://openrouter.ai/api/v1",
+    keyPrefix: "sk-or-",
+    applyUrl: "https://openrouter.ai/keys",
+    tip: "聚合 OpenAI / Anthropic / Google / Meta 等数百模型，按量付费。海外网络。",
+    models: [
+      { value: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5", hint: "推理强 · 工具调用稳" },
+      { value: "openai/gpt-4o", label: "GPT-4o" },
+      { value: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro", hint: "1M 上下文" },
+      { value: "deepseek/deepseek-chat-v3", label: "DeepSeek V3", hint: "便宜" },
+      { value: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B" },
+    ],
+  },
+  {
+    id: "ollama",
+    name: "Ollama 本地",
+    baseUrl: "http://127.0.0.1:11434/v1",
+    keyPrefix: "",
+    applyUrl: "https://ollama.com/download",
+    tip: "本机离线运行，完全免费 + 隐私。需要先 ollama pull <模型名>。Key 随便填（如 ollama）。",
+    models: [
+      { value: "qwen2.5:14b", label: "Qwen2.5 14B", hint: "中文均衡" },
+      { value: "qwen2.5:32b", label: "Qwen2.5 32B", hint: "需要 24G+ 显存" },
+      { value: "deepseek-r1:14b", label: "DeepSeek R1 14B", hint: "本地推理" },
+      { value: "glm4:9b", label: "GLM4 9B" },
+    ],
+  },
+  {
+    id: "openai",
+    name: "OpenAI 官方",
+    baseUrl: "https://api.openai.com/v1",
+    keyPrefix: "sk-",
+    applyUrl: "https://platform.openai.com/api-keys",
+    tip: "OpenAI 原生。中国大陆需要科学上网或代理。",
+    models: [
+      { value: "gpt-4o", label: "GPT-4o", hint: "旗舰多模态" },
+      { value: "gpt-4o-mini", label: "GPT-4o Mini", hint: "便宜 · 适合复核员" },
+      { value: "o3-mini", label: "o3-mini", hint: "深度推理" },
+    ],
+  },
+  {
+    id: "grok",
+    name: "xAI Grok",
+    baseUrl: "https://api.x.ai/v1",
+    keyPrefix: "xai-",
+    applyUrl: "https://console.x.ai/",
+    tip: "Grok 接入 X 实时数据，适合舆情类研究。海外网络。",
+    models: [
+      { value: "grok-4-latest", label: "Grok 4", hint: "最新旗舰" },
+      { value: "grok-3", label: "Grok 3" },
+      { value: "grok-3-mini", label: "Grok 3 Mini" },
+    ],
+  },
+  {
     id: "custom",
     name: "自定义（OpenAI 兼容）",
     baseUrl: "",
     keyPrefix: "",
-    tip: "任何 OpenAI 兼容端点：Ollama 本地、OpenRouter、Azure 等。",
+    tip: "任何 OpenAI 兼容端点：Azure OpenAI、企业内网、文心 V2、私有部署 vLLM 等。",
     models: [],
   },
 ];
@@ -82,6 +219,15 @@ function detectProvider(baseUrl: string): Provider {
   if (baseUrl.includes("lkeap.cloud.tencent.com/plan")) return "lkeap-plan";
   if (baseUrl.includes("lkeap.cloud.tencent.com/v1")) return "lkeap-std";
   if (baseUrl.includes("api.deepseek.com")) return "deepseek";
+  if (baseUrl.includes("dashscope.aliyuncs.com")) return "dashscope";
+  if (baseUrl.includes("open.bigmodel.cn")) return "zhipu";
+  if (baseUrl.includes("api.moonshot.cn")) return "moonshot";
+  if (baseUrl.includes("ark.cn-beijing.volces.com") || baseUrl.includes("ark.volces.com")) return "doubao";
+  if (baseUrl.includes("api.siliconflow.cn")) return "siliconflow";
+  if (baseUrl.includes("openrouter.ai")) return "openrouter";
+  if (baseUrl.includes("127.0.0.1:11434") || baseUrl.includes("localhost:11434") || baseUrl.includes(":11434")) return "ollama";
+  if (baseUrl.includes("api.openai.com")) return "openai";
+  if (baseUrl.includes("api.x.ai")) return "grok";
   return "custom";
 }
 

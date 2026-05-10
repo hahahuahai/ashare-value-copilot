@@ -24,7 +24,7 @@
 - 📐 **反幻觉**：所有数字必须来自 tool call（akshare 实时查询），禁止 LLM 自算
 - 🧪 **AI 复核员**：每份报告由独立的复核 Agent 对照原文扫引用、扫矛盾、扫估值跳跃，产出 issues 清单
 - 🖥️ **桌面端**：Electron 打包，Windows NSIS / Portable 双发行，连 Python 都不用装
-- 🔑 **自带 API Key**：OpenAI 兼容协议，支持腾讯云 LKEAP（含 Token Plan 思考型套餐）/ DeepSeek / Ollama。思考型模型（如 glm-5.1）的 reasoning 链很费 token，v0.1.15 起默认预算已拉到 16384 并内置截断重试
+- 🔑 **自带 API Key · 12 家 LLM Provider 即选即用**：OpenAI 兼容协议，桌面端内置预设：腾讯云 LKEAP / DeepSeek / 阿里通义 / 智谱 GLM / Kimi / 豆包 / 硅基流动 / OpenRouter / Ollama / OpenAI / Grok / 自定义。思考型模型（如 glm-4.6 / qwq）的 reasoning 链很费 token，v0.1.15 起默认预算已拉到 16384 并内置截断重试
 
 ---
 
@@ -60,6 +60,55 @@ pnpm ask 601318             # 中国平安
 报告落到 `reports/{code}-{date}.md / .html`，AI 复核摘要落到 `.meta.json`。
 
 > 更多排错技巧见 [`RUN.md`](./RUN.md)。
+
+---
+
+## 支持的 LLM Provider
+
+桌面端「设置」内置 12 家预设，选完自动填好 `LLM_BASE_URL` 与可选模型。**全部走 OpenAI 兼容协议**，CLI 用户改 `.env` 三个变量即可。
+
+| # | Provider | 推荐模型 | Base URL | 申请 Key |
+|---|---|---|---|---|
+| 1 | **腾讯云 LKEAP · Token Plan** ⭐推荐 | `glm-4.6` / `kimi-k2.5` / `minimax-m2.7` | `https://api.lkeap.cloud.tencent.com/plan/v3` | [控制台](https://console.cloud.tencent.com/lkeap/api-key) |
+| 2 | 腾讯云 LKEAP · 按量计费 | `deepseek-v3` / `deepseek-r1` / `qwen-plus` | `https://api.lkeap.cloud.tencent.com/v1` | [控制台](https://console.cloud.tencent.com/lkeap/api-key) |
+| 3 | DeepSeek 官方 | `deepseek-chat` / `deepseek-reasoner` | `https://api.deepseek.com/v1` | [DeepSeek Platform](https://platform.deepseek.com/api_keys) |
+| 4 | 阿里通义千问（DashScope） | `qwen-max` / `qwen-plus` / `qwq-32b-preview` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | [阿里百炼](https://bailian.console.aliyun.com/?apiKey=1) |
+| 5 | 智谱 GLM | `glm-4.6` / `glm-z1-air` | `https://open.bigmodel.cn/api/paas/v4` | [智谱控制台](https://bigmodel.cn/usercenter/proj-mgmt/apikeys) |
+| 6 | 月之暗面 Kimi | `moonshot-v1-128k` / `kimi-latest` | `https://api.moonshot.cn/v1` | [Moonshot Platform](https://platform.moonshot.cn/console/api-keys) |
+| 7 | 字节豆包（火山方舟） | `doubao-1-5-pro-32k-250115` | `https://ark.cn-beijing.volces.com/api/v3` | [火山方舟](https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey) |
+| 8 | 硅基流动 SiliconFlow | `deepseek-ai/DeepSeek-V3` / `Qwen/QwQ-32B` | `https://api.siliconflow.cn/v1` | [SiliconFlow](https://cloud.siliconflow.cn/account/ak) |
+| 9 | OpenRouter（海外聚合） | `anthropic/claude-sonnet-4.5` / `google/gemini-2.5-pro` | `https://openrouter.ai/api/v1` | [OpenRouter](https://openrouter.ai/keys) |
+| 10 | **Ollama 本地** 🔒离线 | `qwen2.5:14b` / `deepseek-r1:14b` | `http://127.0.0.1:11434/v1` | [Ollama 安装](https://ollama.com/download) |
+| 11 | OpenAI 官方 | `gpt-4o` / `gpt-4o-mini` / `o3-mini` | `https://api.openai.com/v1` | [OpenAI Platform](https://platform.openai.com/api-keys) |
+| 12 | xAI Grok | `grok-4-latest` / `grok-3` | `https://api.x.ai/v1` | [xAI Console](https://console.x.ai/) |
+| 13 | 自定义 | 任意 | 任意 OpenAI 兼容端点（Azure OpenAI / 文心 V2 / vLLM 私有部署 / 其他） | — |
+
+### 选哪个？三句话决策
+
+- **追求性价比 + 国内直连**：腾讯云 LKEAP Token Plan（包月不限模型）或 DeepSeek 官方（V3 极便宜）
+- **追求质量 + 接受海外延迟**：OpenRouter 选 `claude-sonnet-4.5`（推理质量天花板）
+- **追求隐私 + 完全免费**：Ollama 本地跑 `qwen2.5:14b`（需 ≥16GB 内存）
+
+### CLI 用户配置示例（`.env`）
+
+```bash
+# 腾讯云 LKEAP Token Plan
+LLM_BASE_URL=https://api.lkeap.cloud.tencent.com/plan/v3
+LLM_API_KEY=sk-tp-xxxxxxxxxxxx
+LLM_MODEL=glm-4.6
+
+# 或 DeepSeek 官方
+LLM_BASE_URL=https://api.deepseek.com/v1
+LLM_API_KEY=sk-xxxxxxxxxxxx
+LLM_MODEL=deepseek-chat
+
+# 或 Ollama 本地（离线）
+LLM_BASE_URL=http://127.0.0.1:11434/v1
+LLM_API_KEY=ollama
+LLM_MODEL=qwen2.5:14b
+```
+
+> ⚠️ Anthropic Claude / Google Gemini 原生 API 协议不兼容 OpenAI，需要走 OpenRouter 或自建代理（如 [LiteLLM](https://github.com/BerriAI/litellm)）转译。原生适配将在 v0.2 评估。
 
 ---
 
