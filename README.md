@@ -6,8 +6,6 @@
 
 ![status](https://img.shields.io/badge/status-public--beta-brightgreen) ![version](https://img.shields.io/badge/desktop-v0.1.15-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
-> ⚠️ **风险提示：** 这是研究辅助工具，不是投顾服务。输出结论尚未经大样本回测，**请勿据此实盘下单**。所有决策由你自己负责。
-
 ---
 
 ## 为什么做这个
