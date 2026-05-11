@@ -36,10 +36,17 @@ interface JudgeJSON {
   known_unknowns?: string[];
 }
 
+/** v0.2.0：一次大师分析结果 */
+interface MasterAnalysis {
+  id: string;
+  displayName: string;
+  text: string;
+}
+
 interface RenderArgs {
   judge: JudgeJSON;
-  buffettMd: string;
-  duanMd: string;
+  /** v0.2.0：多大师分析结果数组（取代 buffettMd/duanMd） */
+  analyses: MasterAnalysis[];
   fetchedAt: string;
   pe_series?: Array<{ date: string; pe_ttm?: string | null; pb?: string | null; close?: string | null }>;
   industry_compare?: any;
@@ -436,22 +443,18 @@ export function renderReportHTML(args: RenderArgs): string {
     }).join("")}
   </div>` : ""}
 
-  <!-- 大师原文 -->
-  <div class="master-block" id="m-buffett">
-    <div class="head"><h2>巴菲特</h2>
-      ${(j.masters?.buffett?.verdicts ? Object.entries(j.masters.buffett.verdicts).map(([k,v]) => `<span style="font-size:12px;color:var(--mute);">${esc(k)} ${verdictBadge(v)}</span>`).join(" ") : "")}
+  <!-- 大师原文（v0.2.0 多大师循环） -->
+  ${args.analyses.map((a) => {
+    const masterJ = (j.masters as any)?.[a.id];
+    return `
+  <div class="master-block" id="m-${esc(a.id)}">
+    <div class="head"><h2>${esc(a.displayName)}</h2>
+      ${(masterJ?.verdicts ? Object.entries(masterJ.verdicts).map(([k,v]) => `<span style="font-size:12px;color:var(--mute);">${esc(k)} ${verdictBadge(v as string)}</span>`).join(" ") : "")}
     </div>
-    ${j.masters?.buffett?.one_liner ? `<div class="quote">"${esc(j.masters.buffett.one_liner)}"</div>` : ""}
-    <div class="md">${mdToHtml(args.buffettMd)}</div>
-  </div>
-
-  <div class="master-block" id="m-duan">
-    <div class="head"><h2>段永平</h2>
-      ${(j.masters?.duan?.verdicts ? Object.entries(j.masters.duan.verdicts).map(([k,v]) => `<span style="font-size:12px;color:var(--mute);">${esc(k)} ${verdictBadge(v)}</span>`).join(" ") : "")}
-    </div>
-    ${j.masters?.duan?.one_liner ? `<div class="quote">"${esc(j.masters.duan.one_liner)}"</div>` : ""}
-    <div class="md">${mdToHtml(args.duanMd)}</div>
-  </div>
+    ${masterJ?.one_liner ? `<div class="quote">"${esc(masterJ.one_liner)}"</div>` : ""}
+    <div class="md">${mdToHtml(a.text)}</div>
+  </div>`;
+  }).join("\n")}
 
   <!-- 已知未知 -->
   ${(j.known_unknowns ?? []).length > 0 ? `
@@ -616,7 +619,7 @@ function buildAuditReport(args: RenderArgs): { grade: "high" | "mid" | "low"; it
   const items: AuditItem[] = [];
 
   // 提取大师原文里所有"数字%"和"PE = N"出现，做粗略交叉验证
-  const masterText = `${args.buffettMd ?? ""}\n${args.duanMd ?? ""}`;
+  const masterText = (args.analyses ?? []).map((a) => a.text ?? "").join("\n");
 
   const mNum = (v: any): number | null => {
     if (v === null || v === undefined || v === "") return null;
@@ -729,10 +732,16 @@ function buildAuditReport(args: RenderArgs): { grade: "high" | "mid" | "low"; it
     }
     return null;
   };
-  const buffettTrunc = checkTruncated(args.buffettMd ?? "", "巴菲特");
+  const buffettTrunc = checkTruncated((args.analyses ?? []).find(a => a.id === "buffett")?.text ?? "", "巴菲特");
   if (buffettTrunc) items.push(buffettTrunc);
-  const duanTrunc = checkTruncated(args.duanMd ?? "", "段永平");
+  const duanTrunc = checkTruncated((args.analyses ?? []).find(a => a.id === "duan")?.text ?? "", "段永平");
   if (duanTrunc) items.push(duanTrunc);
+  // v0.2.0：检测其他大师截断
+  for (const a of (args.analyses ?? [])) {
+    if (a.id === "buffett" || a.id === "duan") continue;
+    const t = checkTruncated(a.text ?? "", a.displayName);
+    if (t) items.push(t);
+  }
 
   // 评级
   const failN = items.filter(i => i.level === "fail").length;

@@ -13,7 +13,11 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSy
 import { resolve, dirname, join } from "node:path";
 
 import { buildDataPack, data } from "@vc/data";
-import { runMasterStream, runJudge, extractJudgeJSON, runReview, extractReviewJSON } from "@vc/agents";
+import {
+  runMasterStream, runJudge, extractJudgeJSON, runReview, extractReviewJSON,
+  type MasterAnalysis,
+} from "@vc/agents";
+import { MASTERS, getMaster, defaultEnabledMasterIds, type MasterDef } from "@vc/agents";
 import { renderReportHTML, renderReviewCard, renderReviewError } from "./render-report";
 
 const here = __dirname;
@@ -126,16 +130,19 @@ function saveReport(
   name: string,
   fetchedAt: string,
   pack: any,
-  buffett: string,
-  duan: string,
+  analyses: MasterAnalysis[],
   judgeRaw: string,
   judgeObj: any,
-  llmMeta?: { buffett?: any; duan?: any },
+  llmMeta?: Record<string, any>,
 ): { mdPath: string; htmlPath: string } {
   const date = new Date().toISOString().slice(0, 10);
   if (!existsSync(REPORTS_DIR)) mkdirSync(REPORTS_DIR, { recursive: true });
 
-  // Markdown 版本（保留向后兼容）
+  // Markdown 版本（保留向后兼容 — 用动态大师段，老 parseLegacyMd 仍能读 buffett/duan 段）
+  const mdSections = analyses.map((a) => {
+    const def = getMaster(a.id);
+    return `## ${def?.displayName ?? a.id}\n${a.text}`;
+  });
   const md = [
     `# ${code} ${name} · 价投合伙人报告`,
     ``,
@@ -151,11 +158,7 @@ function saveReport(
     JSON.stringify({ valuation: pack.valuation, quote: pack.quote, dividend: pack.dividend, historicalPE: { ...pack.historicalPE, series: undefined } }, null, 2),
     "```",
     ``,
-    `## 巴菲特`,
-    buffett,
-    ``,
-    `## 段永平`,
-    duan,
+    ...mdSections,
     ``,
     `---`,
     `⚠️ 本报告仅用于研究辅助，不构成任何买卖建议。`,
@@ -164,7 +167,6 @@ function saveReport(
   writeFileSync(mdPath, md, "utf-8");
 
   // HTML 版本（主产物）
-  // v0.1.7：从各 sidecar 接口聚合 _source / _warning，透传给报告底部展示
   const collectWarnings = (): string[] => {
     const ws: string[] = [];
     const fields: Array<[string, any]> = [
@@ -184,8 +186,7 @@ function saveReport(
   };
   const html = renderReportHTML({
     judge: judgeObj ?? {},
-    buffettMd: buffett,
-    duanMd: duan,
+    analyses,
     fetchedAt,
     pe_series: pack?.historicalPE?.series ?? [],
     industry_compare: pack?.industryCompare,
@@ -203,10 +204,10 @@ function saveReport(
   const htmlPath = join(REPORTS_DIR, `${code}-${date}.html`);
   writeFileSync(htmlPath, html, "utf-8");
 
-  // 顺便把裁判原始输出也存一份，方便排错
+  // 裁判原始输出
   writeFileSync(join(REPORTS_DIR, `${code}-${date}.judge.txt`), judgeRaw, "utf-8");
 
-  // v0.1.10：保存 review 所需的全部原料（DataPack + 三段 + judgeObj），AI 复核 IPC 直接读这个文件
+  // payload.json（review 所需的全部原料）
   try {
     const payloadPath = join(REPORTS_DIR, `${code}-${date}.payload.json`);
     writeFileSync(
@@ -216,8 +217,10 @@ function saveReport(
         name,
         fetched_at: fetchedAt,
         pack,
-        buffett,
-        duan,
+        analyses,
+        // v0.2.0 兼容旧字段（review IPC legacy 模式用）
+        buffett: analyses.find((a) => a.id === "buffett")?.text ?? "",
+        duan: analyses.find((a) => a.id === "duan")?.text ?? "",
         judgeRaw,
         judgeObj,
         llm_meta: llmMeta ?? null,
@@ -293,6 +296,30 @@ ipcMain.handle("open-reports-dir", async () => {
 
 // === 配置读写（供"设置"弹窗使用） ===
 const ENV_PATH = resolve(USER_ROOT, ".env");
+const SETTINGS_PATH = resolve(USER_ROOT, "settings.json");
+
+// v0.2.0：大师启用列表持久化到 settings.json
+function getEnabledMasterIds(): string[] {
+  try {
+    if (existsSync(SETTINGS_PATH)) {
+      const s = JSON.parse(readFileSync(SETTINGS_PATH, "utf-8"));
+      if (Array.isArray(s.enabledMasters) && s.enabledMasters.length > 0) {
+        return s.enabledMasters;
+      }
+    }
+  } catch {}
+  return defaultEnabledMasterIds();
+}
+
+function setEnabledMasterIds(ids: string[]) {
+  let s: any = {};
+  try {
+    if (existsSync(SETTINGS_PATH)) s = JSON.parse(readFileSync(SETTINGS_PATH, "utf-8"));
+  } catch {}
+  s.enabledMasters = ids;
+  if (!existsSync(USER_ROOT)) mkdirSync(USER_ROOT, { recursive: true });
+  writeFileSync(SETTINGS_PATH, JSON.stringify(s, null, 2), "utf-8");
+}
 
 // 注意：agents/llm.ts 用的是 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL
 const KNOWN_KEYS = ["LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "PYTHON_BIN"] as const;
@@ -374,11 +401,29 @@ ipcMain.handle("open-env-file", async () => {
   shell.openPath(ENV_PATH);
 });
 
+// v0.2.0：大师注册表 + 选择 IPC
+ipcMain.handle("get-masters", async () => {
+  return {
+    all: MASTERS.map((m) => ({ id: m.id, displayName: m.displayName, subtitle: m.subtitle, defaultEnabled: m.defaultEnabled })),
+    enabled: getEnabledMasterIds(),
+  };
+});
+
+ipcMain.handle("set-masters", async (_e, ids: string[]) => {
+  setEnabledMasterIds(ids);
+  return { ok: true };
+});
+
 ipcMain.handle("ask", async (event, code: string) => {
   if (!/^\d{6}$/.test(code)) throw new Error(`股票代码格式错误：${code}`);
   if (!(await ensureSidecar())) throw new Error("数据边车启动失败");
 
   const send = (channel: string, payload: any) => event.sender.send(channel, payload);
+
+  // v0.2.0：读取用户启用的大师列表（settings 持久化；无设置时用注册表默认值）
+  const enabledIds = getEnabledMasterIds();
+  const enabledDefs: MasterDef[] = enabledIds.map((id) => getMaster(id)).filter(Boolean) as MasterDef[];
+  if (enabledDefs.length === 0) throw new Error("未启用任何大师，请在设置中至少启用一位");
 
   send("ask:status", { phase: "fetching", text: `🔍 拉取数据 ${code}...` });
   const pack = await buildDataPack(code);
@@ -395,39 +440,33 @@ ipcMain.handle("ask", async (event, code: string) => {
     pe_percentile: (pack.historicalPE as any)?.pe_percentile ?? null,
   });
 
-  send("ask:status", { phase: "buffett", text: "🧠 巴菲特正在思考..." });
-  const buffettResult = await runMasterStream({ master: "buffett", data: pack }, (delta, phase) => {
-    send("ask:chunk", { master: "buffett", phase, delta });
-  });
-  const buffett = buffettResult.text;
-  if (buffettResult.meta.truncated) {
-    send("ask:warn", {
-      master: "buffett",
-      msg: `⚠️ 巴菲特原文在 ${buffettResult.meta.max_tokens_used} tokens 预算下被截断（已自动重试${buffettResult.meta.retried_on_length ? "并扩容" : ""}），请查看 meta 文件。`,
-    });
-  }
+  // 顺序跑每位大师（流式）
+  const analyses: MasterAnalysis[] = [];
+  const llmMeta: Record<string, any> = {};
 
-  send("ask:status", { phase: "duan", text: "🧠 段永平正在思考..." });
-  const duanResult = await runMasterStream({ master: "duan", data: pack }, (delta, phase) => {
-    send("ask:chunk", { master: "duan", phase, delta });
-  });
-  const duan = duanResult.text;
-  if (duanResult.meta.truncated) {
-    send("ask:warn", {
-      master: "duan",
-      msg: `⚠️ 段永平原文在 ${duanResult.meta.max_tokens_used} tokens 预算下被截断（已自动重试${duanResult.meta.retried_on_length ? "并扩容" : ""}），请查看 meta 文件。`,
+  for (const def of enabledDefs) {
+    send("ask:status", { phase: def.id, text: `🧠 ${def.displayName}正在思考...` });
+    const result = await runMasterStream({ master: def.id, data: pack }, (delta, phase) => {
+      send("ask:chunk", { master: def.id, phase, delta });
     });
+    analyses.push({ id: def.id, displayName: def.displayName, text: result.text });
+    llmMeta[def.id] = result.meta;
+    if (result.meta.truncated) {
+      send("ask:warn", {
+        master: def.id,
+        msg: `⚠️ ${def.displayName}原文在 ${result.meta.max_tokens_used} tokens 预算下被截断（已自动重试${result.meta.retried_on_length ? "并扩容" : ""}），请查看 meta 文件。`,
+      });
+    }
   }
 
   send("ask:status", { phase: "judge", text: "⚖️ 综合裁判汇总打分..." });
   let judgeRaw = "";
   let judgeObj: any = null;
   try {
-    judgeRaw = await runJudge({ data: pack, buffett, duan });
+    judgeRaw = await runJudge({ data: pack, analyses });
     judgeObj = extractJudgeJSON(judgeRaw);
   } catch (e: any) {
     console.warn("[judge] failed:", e?.message);
-    // 兜底：构造一份最小可渲染的 Judge JSON，避免 HTML 报告全空
     judgeObj = {
       code,
       name,
@@ -449,10 +488,7 @@ ipcMain.handle("ask", async (event, code: string) => {
     };
   }
 
-  const { mdPath, htmlPath } = saveReport(code, name, pack.fetched_at, pack, buffett, duan, judgeRaw, judgeObj, {
-    buffett: buffettResult.meta,
-    duan: duanResult.meta,
-  });
+  const { mdPath, htmlPath } = saveReport(code, name, pack.fetched_at, pack, analyses, judgeRaw, judgeObj, llmMeta);
   send("ask:judge", { judge: judgeObj });
   send("ask:status", { phase: "done", text: "✓ 完成", path: htmlPath, mdPath });
   return { path: htmlPath, mdPath };
@@ -514,14 +550,20 @@ ipcMain.handle("review", async (_event, htmlPath: string): Promise<{ ok: boolean
     }
     // 1) 优先走标准模式：找同目录 payload.json
     const payloadPath = htmlPath.replace(/\.html$/i, ".payload.json");
-    let pack: any = null, buffett = "", duan = "", judgeRaw = "", judgeObj: any = null;
+    let pack: any = null, analyses: MasterAnalysis[] = [], judgeRaw = "", judgeObj: any = null;
     let mode: "standard" | "legacy" = "standard";
 
     if (existsSync(payloadPath)) {
       const payload = JSON.parse(readFileSync(payloadPath, "utf-8"));
       pack = payload.pack;
-      buffett = payload.buffett ?? "";
-      duan = payload.duan ?? "";
+      // v0.2.0：优先用 analyses[]，兼容旧 payload（只有 buffett/duan）
+      if (Array.isArray(payload.analyses) && payload.analyses.length > 0) {
+        analyses = payload.analyses;
+      } else {
+        // 旧格式兼容
+        if (payload.buffett) analyses.push({ id: "buffett", displayName: "巴菲特", text: payload.buffett });
+        if (payload.duan) analyses.push({ id: "duan", displayName: "段永平", text: payload.duan });
+      }
       judgeRaw = payload.judgeRaw ?? "";
       judgeObj = payload.judgeObj;
       if (!pack || !judgeObj) {
@@ -540,8 +582,10 @@ ipcMain.handle("review", async (_event, htmlPath: string): Promise<{ ok: boolean
       mode = "legacy";
       judgeObj = parsed.judgeObj;
       judgeRaw = parsed.judgeRaw;
-      buffett = parsed.buffett;
-      duan = parsed.duan;
+      analyses = [
+        { id: "buffett", displayName: "巴菲特", text: parsed.buffett },
+        { id: "duan", displayName: "段永平", text: parsed.duan },
+      ];
       // DataPack 用空骨架，告诉 reviewer 只做逻辑/相关性审查
       pack = {
         code: judgeObj?.code ?? "",
@@ -558,7 +602,7 @@ ipcMain.handle("review", async (_event, htmlPath: string): Promise<{ ok: boolean
     }
 
     // 3) 调 reviewer
-    const raw = await runReview({ data: pack, buffett, duan, judgeRaw, judgeObj });
+    const raw = await runReview({ data: pack, analyses, judgeRaw, judgeObj });
     // 无论成功与否，先把 raw 落地一份给排错
     try {
       writeFileSync(htmlPath.replace(/\.html$/i, ".review.raw.txt"), raw ?? "", "utf-8");

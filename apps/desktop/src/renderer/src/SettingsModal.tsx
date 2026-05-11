@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AppConfig } from "../../preload";
+import type { AppConfig, MasterInfo } from "../../preload";
 
 interface Props {
   open: boolean;
@@ -243,6 +243,10 @@ export function SettingsModal({ open, onClose, onSaved, forcedSetup }: Props) {
   const [reveal, setReveal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedTick, setSavedTick] = useState(false);
+  // v0.2.0：tabs + 大师选择
+  const [tab, setTab] = useState<"llm" | "masters">("llm");
+  const [allMasters, setAllMasters] = useState<MasterInfo[]>([]);
+  const [enabledIds, setEnabledIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -257,6 +261,10 @@ export function SettingsModal({ open, onClose, onSaved, forcedSetup }: Props) {
       setPythonBin(c.PYTHON_BIN || "");
       setEnvPath(c.envPath);
       setIsPackaged(c.isPackaged);
+      // v0.2.0：加载大师列表
+      const m = await window.vc.getMasters();
+      setAllMasters(m.all);
+      setEnabledIds(m.enabled);
     })();
   }, [open]);
 
@@ -290,6 +298,10 @@ export function SettingsModal({ open, onClose, onSaved, forcedSetup }: Props) {
         LLM_MODEL: effectiveModel,
         PYTHON_BIN: pythonBin.trim(),
       });
+      // v0.2.0：保存大师选择
+      if (enabledIds.length > 0) {
+        await window.vc.setMasters(enabledIds);
+      }
       setSavedTick(true);
       onSaved?.();
       setTimeout(() => {
@@ -316,7 +328,20 @@ export function SettingsModal({ open, onClose, onSaved, forcedSetup }: Props) {
               ⚙️ 设置
               {forcedSetup && <span className="text-amber text-xs font-normal">首次运行 · 请先配置</span>}
             </h3>
-            <p className="text-mute text-xs mt-0.5">配置保存在本地 .env 文件，保存后立即生效，无需重启</p>
+            <div className="flex gap-4 mt-2">
+              <button
+                onClick={() => setTab("llm")}
+                className={`text-xs pb-1 border-b-2 transition-colors ${tab === "llm" ? "border-gold text-gold font-semibold" : "border-transparent text-mute hover:text-ink"}`}
+              >
+                模型配置
+              </button>
+              <button
+                onClick={() => setTab("masters")}
+                className={`text-xs pb-1 border-b-2 transition-colors ${tab === "masters" ? "border-gold text-gold font-semibold" : "border-transparent text-mute hover:text-ink"}`}
+              >
+                分析师（大师）
+              </button>
+            </div>
           </div>
           {!forcedSetup && (
             <button onClick={onClose} className="text-mute hover:text-ink text-lg leading-none">✕</button>
@@ -324,6 +349,7 @@ export function SettingsModal({ open, onClose, onSaved, forcedSetup }: Props) {
         </div>
 
         <div className="px-5 py-4 space-y-5 overflow-y-auto">
+          {tab === "llm" && (<>
           {/* 服务类型 */}
           <div>
             <label className="text-sm text-ink font-medium block mb-1.5">
@@ -493,6 +519,55 @@ export function SettingsModal({ open, onClose, onSaved, forcedSetup }: Props) {
               </div>
             </div>
           </details>
+          </>)}
+
+          {tab === "masters" && (
+            <div>
+              <p className="text-xs text-mute mb-3">
+                选择参与分析的大师。启用越多，报告视角越全面，但运行时间 + token 消耗会翻倍。
+                <br/>建议开 2-4 位。改动保存后下次分析生效。
+              </p>
+              <div className="space-y-2">
+                {allMasters.map((m) => {
+                  const checked = enabledIds.includes(m.id);
+                  return (
+                    <label
+                      key={m.id}
+                      className={`flex items-center gap-3 px-4 py-3 rounded border cursor-pointer transition-colors ${
+                        checked ? "border-gold bg-gold/5" : "border-line hover:border-mute bg-panel2"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          setEnabledIds((prev) =>
+                            checked ? prev.filter((id) => id !== m.id) : [...prev, m.id],
+                          );
+                        }}
+                        className="accent-gold w-4 h-4"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-ink font-medium flex items-center gap-2">
+                          {m.displayName}
+                          {m.defaultEnabled && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-gold/15 text-gold rounded">默认</span>
+                          )}
+                        </div>
+                        <div className="text-mute text-xs mt-0.5">{m.subtitle}</div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              {enabledIds.length === 0 && (
+                <p className="text-red-soft text-xs mt-2">⚠️ 至少启用一位大师</p>
+              )}
+              <p className="text-mute text-xs mt-3">
+                当前启用 <span className="text-gold font-semibold">{enabledIds.length}</span> / {allMasters.length} 位
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="px-5 py-3 border-t border-line flex items-center justify-between bg-panel2/50 rounded-b-lg shrink-0">

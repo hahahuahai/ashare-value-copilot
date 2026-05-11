@@ -14,9 +14,35 @@
 
 ### Planned
 - reviewer 结果落进 `reports/*.meta.json`（目前 meta 只存 buffett/duan/judge）
-- 芒格 Agent，三方圆桌辩论
 - 5 支样例批量跑（茅台 / 平安 / 福耀 / 海天 / 五粮液）
 - 能力圈档案（SQLite）+ 持仓周报 + 企微推送
+
+---
+
+## [0.2.0] - 2026-05-11
+
+### Added
+- **多大师体系：8 位价值投资大师可自由组合**
+  - 新增 6 位大师 Agent：查理·芒格（否决视角）、彼得·林奇（成长股 PEG）、霍华德·马克斯（周期与第二层思维）、本杰明·格雷厄姆（防御性投资 7 标准）、菲利普·费雪（管理层质量 + 闲聊法）、李录（中国语境价投）
+  - 每位大师拥有独立 system prompt（prompts/*.md），深度差异化人格、输出格式、思维模型
+  - 默认启用 4 位（巴菲特、段永平、芒格、李录），可在设置中自由增减
+- **MasterDef 注册表**（`packages/agents/src/masters.ts`）：数据驱动的大师管理，新增大师只需追加注册表 + 写 prompt 文件
+- **设置面板"分析师"页签**：可视化多选启用/禁用大师，实时显示启用数量
+- **settings.json 持久化**：大师选择独立于 .env，存储在用户数据目录
+
+### Changed
+- **ask 流程改为动态循环**：主进程按用户启用的大师列表顺序执行，不再硬编码 buffett→duan
+- **runJudge / runReview 签名重构**：从 `{ buffett, duan }` 改为 `{ analyses: MasterAnalysis[] }`，支持任意数量大师组合
+- **HTML 报告多大师渲染**：大师原文段从硬编码双块改为循环渲染，自动适配启用的大师数量
+- **App.tsx 动态多卡片**：流式展示从固定双列改为 flex-wrap 自适应布局，Phase 状态从枚举改为 string
+- **可信度自检**：截断检测扩展到所有启用大师（不再只检查 buffett/duan）
+- **CLI 同步**：`pnpm ask` 自动跑默认启用的大师列表
+- **preload API 扩展**：新增 `getMasters`/`setMasters`/`onWarn`，`onChunk` 的 master 字段从联合类型改为 string
+
+### Compatibility
+- **payload.json 向后兼容**：同时写 analyses[] 数组和 buffett/duan 平铺字段，旧版复核 IPC 仍可读
+- **parseLegacyMd 保持不动**：v0.1.x 生成的旧报告仍可被复核降级模式解析
+- **judge.md masters 字段动态**：裁判 prompt 要求为所有启用大师填写 verdicts，不限于 buffett/duan
 
 ---
 

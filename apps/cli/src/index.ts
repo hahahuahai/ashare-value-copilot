@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * value-council CLI — MVP
+ * value-council CLI — v0.2.0
  *   value-council ask <code>     例: value-council ask 600519
  *   value-council ping            探活边车
  *
@@ -29,10 +29,11 @@ loadEnvSync();
 // === Phase 2: 现在才允许 import 业务模块 ===
 const { buildDataPack, data } = await import("@vc/data");
 const { runMaster } = await import("@vc/agents");
+const { defaultEnabledMasterIds, getMaster } = await import("@vc/agents");
 
 function help() {
   console.log(`
-${kleur.bold("价投合伙人 · value-council")} ${kleur.dim("v0.0.1 (MVP)")}
+${kleur.bold("价投合伙人 · value-council")} ${kleur.dim("v0.2.0")}
 
 ${kleur.bold("用法:")}
   ${kleur.cyan("value-council ask <股票代码>")}     调用大师委员会分析一支 A 股
@@ -72,22 +73,25 @@ async function cmdAsk(code: string) {
   const pack = await buildDataPack(code);
   const name = (pack.quote as any)?.name ?? (pack.profile as any)?.["股票简称"] ?? "";
 
-  // 3. Buffett
-  console.log(kleur.cyan("🧠 巴菲特正在思考..."));
-  const buffett = await runMaster({ master: "buffett", data: pack });
-  console.log("\n" + kleur.bold().yellow("══ 巴菲特 ══"));
-  console.log(buffett);
+  // 3. v0.2.0：循环跑所有默认启用的大师
+  const enabledIds = defaultEnabledMasterIds();
+  const results: { id: string; displayName: string; text: string }[] = [];
 
-  // 4. 段永平
-  console.log("\n" + kleur.cyan("🧠 段永平正在思考..."));
-  const duan = await runMaster({ master: "duan", data: pack });
-  console.log("\n" + kleur.bold().yellow("══ 段永平 ══"));
-  console.log(duan);
+  for (const id of enabledIds) {
+    const def = getMaster(id);
+    const displayName = def?.displayName ?? id;
+    console.log(kleur.cyan(`\n🧠 ${displayName}正在思考...`));
+    const text = await runMaster({ master: id, data: pack });
+    console.log("\n" + kleur.bold().yellow(`══ ${displayName} ══`));
+    console.log(text);
+    results.push({ id, displayName, text });
+  }
 
-  // 5. 落盘
+  // 4. 落盘
   const date = new Date().toISOString().slice(0, 10);
   const dir = resolve(process.cwd(), "reports");
   await mkdir(dir, { recursive: true });
+  const mdSections = results.map((r) => `## ${r.displayName}\n${r.text}`);
   const md = [
     `# ${code} ${name} · 价投合伙人报告`,
     ``,
@@ -98,11 +102,7 @@ async function cmdAsk(code: string) {
     JSON.stringify({ valuation: pack.valuation, quote: pack.quote }, null, 2),
     "```",
     ``,
-    `## 巴菲特`,
-    buffett,
-    ``,
-    `## 段永平`,
-    duan,
+    ...mdSections,
     ``,
     `---`,
     `⚠️ 本报告仅用于研究辅助，不构成任何买卖建议。`,

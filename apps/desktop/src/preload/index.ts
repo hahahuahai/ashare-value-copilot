@@ -18,6 +18,14 @@ export interface ReportItem {
   mtime: number;
 }
 
+/** v0.2.0：大师定义（从 main 传到 renderer） */
+export interface MasterInfo {
+  id: string;
+  displayName: string;
+  subtitle: string;
+  defaultEnabled: boolean;
+}
+
 export interface VCApi {
   health: () => Promise<{ ok: boolean; sidecarUrl: string; model: string }>;
   ensureSidecar: () => Promise<boolean>;
@@ -29,13 +37,18 @@ export interface VCApi {
   review: (htmlPath: string) => Promise<{ ok: boolean; score?: number; level?: string; issues?: number; error?: string; mode?: "standard" | "legacy" }>;
   onStatus: (cb: (p: { phase: string; text: string; path?: string; mdPath?: string }) => void) => () => void;
   onDataPack: (cb: (p: any) => void) => () => void;
-  onChunk: (cb: (p: { master: "buffett" | "duan"; phase: "thinking" | "answer"; delta: string }) => void) => () => void;
+  /** v0.2.0：master 字段从 "buffett"|"duan" 变成任意 string（大师 id） */
+  onChunk: (cb: (p: { master: string; phase: "thinking" | "answer"; delta: string }) => void) => () => void;
   onJudge: (cb: (p: { judge: any }) => void) => () => void;
+  onWarn: (cb: (p: { master: string; msg: string }) => void) => () => void;
   // 配置
   getConfig: () => Promise<AppConfig>;
   saveConfig: (cfg: Partial<Omit<AppConfig, "envPath" | "isPackaged">>) => Promise<{ ok: boolean; envPath: string }>;
   openEnvFile: () => Promise<void>;
   onNeedsSetup: (cb: () => void) => () => void;
+  // v0.2.0：大师管理
+  getMasters: () => Promise<{ all: MasterInfo[]; enabled: string[] }>;
+  setMasters: (ids: string[]) => Promise<{ ok: boolean }>;
 }
 
 const sub = (channel: string, cb: (p: any) => void) => {
@@ -57,10 +70,13 @@ const api: VCApi = {
   onDataPack: (cb) => sub("ask:data-pack", cb),
   onChunk: (cb) => sub("ask:chunk", cb),
   onJudge: (cb) => sub("ask:judge", cb),
+  onWarn: (cb) => sub("ask:warn", cb),
   getConfig: () => ipcRenderer.invoke("get-config"),
   saveConfig: (cfg) => ipcRenderer.invoke("save-config", cfg),
   openEnvFile: () => ipcRenderer.invoke("open-env-file"),
   onNeedsSetup: (cb) => sub("config:needs-setup", cb),
+  getMasters: () => ipcRenderer.invoke("get-masters"),
+  setMasters: (ids) => ipcRenderer.invoke("set-masters", ids),
 };
 
 contextBridge.exposeInMainWorld("vc", api);

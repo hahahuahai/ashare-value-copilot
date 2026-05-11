@@ -90,17 +90,35 @@ export async function runMasterStream(
   });
 }
 
-/** 综合裁判：吃 DataPack + 巴菲特原文 + 段永平原文，吐出 JSON 打分卡。 */
+/** v0.2.0：一次大师分析的封装 —— { id, displayName, text }。
+ *  judge/reviewer 的 prompt 用 displayName 作为段标题，便于裁判按"巴菲特/段永平/芒格"分别表态。 */
+export interface MasterAnalysis {
+  id: string;
+  displayName: string;
+  text: string;
+}
+
+/** 综合裁判：吃 DataPack + N 位大师的原文，吐出 JSON 打分卡。
+ *
+ *  v0.2.0：参数从硬编码 { buffett, duan } 改成 analyses[]，支持任意启用的大师组合。
+ *  兼容性：旧 caller 可以传 { buffett, duan } 自己拼成 analyses 后再调用，本函数不再接受老参数。
+ */
 export async function runJudge(args: {
   data: DataPack;
-  buffett: string;
-  duan: string;
+  analyses: MasterAnalysis[];
 }): Promise<string> {
   const system = await loadPrompt("judge");
+  const masterSections = args.analyses.flatMap((a) => [
+    "",
+    `# ${a.displayName}（id=${a.id}）的论述`,
+    a.text || "（空）",
+  ]);
+
   const userMsg = [
     `# 待汇总对象`,
     `股票代码：${args.data.code}`,
     `数据获取时间：${args.data.fetched_at}`,
+    `本次启用大师：${args.analyses.map((a) => `${a.displayName}(${a.id})`).join("、")}`,
     "",
     `# DataPack（唯一数字来源）`,
     "```json",
@@ -118,17 +136,13 @@ export async function runJudge(args: {
       2,
     ),
     "```",
-    "",
-    `# 巴菲特的论述`,
-    args.buffett,
-    "",
-    `# 段永平的论述`,
-    args.duan,
+    ...masterSections,
     "",
     `# 强制要求`,
     `- 严格按 system prompt 的 JSON Schema 输出，外层用 \`\`\`json 包裹。`,
     `- 不许输出 JSON 之外的任何文字。`,
     `- 数字缺失填 null。`,
+    `- masters 字段必须为本次启用的所有大师都填一个子对象（key 用大师 id），verdicts 三段（business/company/price）按其原文 PASS/FAIL/GRAY 抄写；one_liner 抄其原文里那句话。`,
   ].join("\n");
 
   return complete(
@@ -158,21 +172,31 @@ export interface ReviewJSON {
   issues: ReviewIssue[];
 }
 
-/** 复核员：吃 DataPack + 三段输出，吐出可信度评分 + 问题清单 JSON 字符串。
+/** 复核员：吃 DataPack + N 位大师原文 + judge，吐出可信度评分 + 问题清单 JSON 字符串。
  *  改用流式调用：思考型模型在非流式下经常只回 reasoning_content，
- *  completeStream 内有非流式重试兜底，能拿到完整 content。 */
+ *  completeStream 内有非流式重试兜底，能拿到完整 content。
+ *
+ *  v0.2.0：参数从 { buffett, duan } 改成 analyses[]，issues[].anchor 现在可以是任意 "<id>:..." 形式。
+ */
 export async function runReview(args: {
   data: DataPack;
-  buffett: string;
-  duan: string;
+  analyses: MasterAnalysis[];
   judgeRaw: string;
   judgeObj: any;
 }): Promise<string> {
   const system = await loadPrompt("reviewer");
+  const masterSections = args.analyses.flatMap((a) => [
+    "",
+    `# ${a.displayName}（id=${a.id}）原文（待审）`,
+    a.text || "（空）",
+  ]);
+  const anchorIds = args.analyses.map((a) => a.id);
+
   const userMsg = [
     `# 待复核报告对象`,
     `股票代码：${args.data.code}`,
     `数据获取时间：${args.data.fetched_at}`,
+    `本次启用大师：${args.analyses.map((a) => `${a.displayName}(${a.id})`).join("、")}`,
     "",
     `# DataPack（唯一数字真相源）`,
     "```json",
@@ -190,12 +214,7 @@ export async function runReview(args: {
       2,
     ),
     "```",
-    "",
-    `# 巴菲特原文（待审）`,
-    args.buffett || "（空）",
-    "",
-    `# 段永平原文（待审）`,
-    args.duan || "（空）",
+    ...masterSections,
     "",
     `# 裁判 JSON（待审）`,
     "```json",
@@ -210,6 +229,7 @@ export async function runReview(args: {
     `- 不要 \`\`\`json 围栏，不要任何前后文字。`,
     `- issues 按 severity 降序，最多 8 条。`,
     `- quote 必须是上面任一段原文里**真实存在**的文字（≤30字）；伪造即视为本次复核作废。`,
+    `- issues[].anchor 取值范围：${anchorIds.map((id) => `"${id}:..."`).join("、")} 或 "judge:..." 或 "cross"。`,
   ].join("\n");
 
   // 用流式（内置 thinking-only 自动重试），maxTokens 顶到 16384 防截断
