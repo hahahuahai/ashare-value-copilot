@@ -32,7 +32,7 @@
 
 ### A. 桌面端（推荐 · 给"只想点按钮的你"）
 
-1. 去 [Releases](https://github.com/hahahuahai/ashare-value-copilot/releases) 下载 `价投合伙人-0.1.15-x64.exe`（NSIS 安装版）或 `价投合伙人-0.1.15-portable.exe`（免安装版）
+1. 去 [Releases](https://github.com/hahahuahai/ashare-value-copilot/releases) 下载 `价投合伙人-0.2.1-x64.exe`（NSIS 安装版）或 `价投合伙人-0.2.1-portable.exe`（免安装版）
 2. **本地需装 Python 3.10+**（数据边车用 akshare，桌面端会自动启 sidecar 子进程）
 3. 首次启动填 `LLM_BASE_URL / API_KEY / MODEL`（支持 LKEAP / DeepSeek / 本地 Ollama）
 4. 输入股票代码，点「跑」→ 得到三段式 HTML 报告 + AI 复核结论
