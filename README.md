@@ -1,5 +1,7 @@
 # 价投合伙人 · A-Share Value Copilot
 
+[中文](./README.md) | [English](./README.en.md)
+
 > 一个开源的本地 AI 投研合伙人。把"好生意 / 好公司 / 好价格"编码进价投大师 Agent，替你做尽调、出三段式报告、自我复核、桌面端一键跑。
 >
 > **ai-hedge-fund 教你做对冲基金，价投合伙人教你少做交易。**
