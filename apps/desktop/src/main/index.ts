@@ -137,6 +137,7 @@ function saveReport(
 ): { mdPath: string; htmlPath: string } {
   const date = new Date().toISOString().slice(0, 10);
   if (!existsSync(REPORTS_DIR)) mkdirSync(REPORTS_DIR, { recursive: true });
+  const displayName = name ? `${name} ${code}` : code;
 
   // Markdown 版本（保留向后兼容 — 用动态大师段，老 parseLegacyMd 仍能读 buffett/duan 段）
   const mdSections = analyses.map((a) => {
@@ -144,7 +145,7 @@ function saveReport(
     return `## ${def?.displayName ?? a.id}\n${a.text}`;
   });
   const md = [
-    `# ${code} ${name} · 价投合伙人报告`,
+    `# ${displayName} · 价投合伙人报告`,
     ``,
     `> 生成于 ${fetchedAt}`,
     ``,
@@ -185,7 +186,7 @@ function saveReport(
     return ws;
   };
   const html = renderReportHTML({
-    judge: judgeObj ?? {},
+    judge: { ...(judgeObj ?? {}), code, name },
     analyses,
     fetchedAt,
     pe_series: pack?.historicalPE?.series ?? [],
@@ -273,6 +274,14 @@ ipcMain.handle("health", async () => {
 
 ipcMain.handle("ensure-sidecar", async () => {
   return await ensureSidecar();
+});
+
+ipcMain.handle("search-stocks", async (_e, query: string) => {
+  const q = String(query ?? "").trim();
+  if (!q) return [];
+  if (!(await ensureSidecar())) throw new Error("数据边车启动失败");
+  const result = await data.searchStocks(q);
+  return result.rows ?? [];
 });
 
 ipcMain.handle("list-reports", async () => listReports());
@@ -415,8 +424,17 @@ ipcMain.handle("set-masters", async (_e, ids: string[]) => {
 });
 
 ipcMain.handle("ask", async (event, code: string) => {
-  if (!/^\d{6}$/.test(code)) throw new Error(`股票代码格式错误：${code}`);
+  const input = String(code ?? "").trim();
   if (!(await ensureSidecar())) throw new Error("数据边车启动失败");
+  const codeInInput = input.match(/\b(\d{6})\b/)?.[1];
+  if (codeInInput) {
+    code = codeInInput;
+  } else {
+    const found = await data.searchStocks(input);
+    const first = found.rows?.[0];
+    if (!first) throw new Error(`未找到匹配的 A 股公司：${input}`);
+    code = first.code;
+  }
 
   const send = (channel: string, payload: any) => event.sender.send(channel, payload);
 
@@ -651,7 +669,11 @@ ipcMain.handle("review", async (_event, htmlPath: string): Promise<{ ok: boolean
 
 // === Lifecycle ===
 app.whenReady().then(async () => {
-  ensureSidecar(); // 后台拉起，不阻塞窗口
+  ensureSidecar()
+    .then((ok) => {
+      if (ok) data.searchStocks("中国").catch((e) => console.warn("[search] prewarm failed:", e));
+    })
+    .catch((e) => console.warn("[sidecar] background start failed:", e));
   createWindow();
   // 窗口就绪后，若缺 key，通知渲染层自动打开设置面板（不再用原生对话框阻塞）
   win?.webContents.once("did-finish-load", () => {

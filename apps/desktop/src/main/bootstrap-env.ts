@@ -46,6 +46,17 @@ if (!process.env.VC_REPO_ROOT) {
   process.env.VC_REPO_ROOT = resRoot;
 }
 
+// Desktop owns its data sidecar. Use a desktop-specific default port so a stale
+// sidecar from an older portable package on 9876 cannot silently shadow new APIs.
+if (!process.env.DATA_SIDECAR_URL) {
+  const port = process.env.DATA_SIDECAR_PORT || "9877";
+  process.env.DATA_SIDECAR_PORT = port;
+  process.env.DATA_SIDECAR_URL = `http://127.0.0.1:${port}`;
+}
+if (!process.env.STOCK_LIST_CACHE_FILE) {
+  process.env.STOCK_LIST_CACHE_FILE = resolve(userRoot, "stock-list-cache.json");
+}
+
 export const IS_PACKAGED = isPackaged;
 export const RES_ROOT = resRoot; // prompts/services 等只读资源
 export const USER_ROOT = userRoot; // reports/.env 等可写数据

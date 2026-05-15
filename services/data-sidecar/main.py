@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import datetime
+import os
 from decimal import Decimal
 from typing import Any
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -20,6 +21,8 @@ try:
 except ImportError:
     print("[fatal] akshare 未安装。请运行: pip install akshare pandas")
     raise
+
+_STOCK_LIST_CACHE: dict[str, Any] = {"date": None, "rows": None}
 
 
 def _to_str(v: Any) -> Any:
@@ -70,6 +73,100 @@ def _retry(fn, attempts=3, delay=0.6):
             if i < attempts - 1:
                 time.sleep(delay * (2 ** i))
     raise last
+
+
+def _load_stock_list_cache(today: str) -> list | None:
+    cache_file = os.environ.get("STOCK_LIST_CACHE_FILE")
+    if not cache_file or not os.path.exists(cache_file):
+        return None
+    try:
+        with open(cache_file, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        rows = payload.get("rows")
+        if payload.get("date") == today and isinstance(rows, list):
+            return rows
+    except Exception:
+        return None
+    return None
+
+
+def _save_stock_list_cache(today: str, rows: list) -> None:
+    cache_file = os.environ.get("STOCK_LIST_CACHE_FILE")
+    if not cache_file:
+        return
+    try:
+        parent = os.path.dirname(cache_file)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump({"date": today, "rows": rows}, f, ensure_ascii=False)
+    except Exception as e:
+        print(f"[sidecar] stock list cache save failed: {e}")
+
+
+def get_stock_search(q: str) -> dict:
+    """A 股代码/名称模糊搜索。
+
+    输入可以是 6 位完整代码、代码片段或中文公司简称片段。结果只返回 A 股代码表里的证券。
+    """
+    query = (q or "").strip()
+    if not query:
+        return {"query": query, "rows": [], "row_count": 0}
+
+    today = datetime.date.today().isoformat()
+    rows = _STOCK_LIST_CACHE.get("rows")
+    if _STOCK_LIST_CACHE.get("date") != today or rows is None:
+        cached_rows = _load_stock_list_cache(today)
+        if cached_rows is not None:
+            rows = cached_rows
+            _STOCK_LIST_CACHE["date"] = today
+            _STOCK_LIST_CACHE["rows"] = rows
+        else:
+            try:
+                df = _retry(lambda: ak.stock_info_a_code_name(), attempts=3)
+                rows = []
+                if df is not None and not df.empty:
+                    for _, r in df.iterrows():
+                        code = str(r.get("code") or r.get("证券代码") or "").strip()
+                        name = str(r.get("name") or r.get("证券简称") or "").strip()
+                        if len(code) == 6 and code.isdigit() and name:
+                            rows.append({"code": code, "name": name})
+                _STOCK_LIST_CACHE["date"] = today
+                _STOCK_LIST_CACHE["rows"] = rows
+                _save_stock_list_cache(today, rows)
+            except Exception as e:
+                return {"query": query, "rows": [], "row_count": 0, "error": str(e)}
+
+    q_lower = query.lower()
+    is_digits = query.isdigit()
+    matches = []
+    for item in rows:
+        code = item["code"]
+        name = item["name"]
+        score = None
+        reason = ""
+        if is_digits:
+            if code == query:
+                score, reason = 100, "code_exact"
+            elif code.startswith(query):
+                score, reason = 80 - max(0, len(code) - len(query)), "code_prefix"
+            elif query in code:
+                score, reason = 60, "code_contains"
+        else:
+            name_lower = name.lower()
+            if name == query:
+                score, reason = 100, "name_exact"
+            elif name.startswith(query):
+                score, reason = 85, "name_prefix"
+            elif q_lower in name_lower:
+                score, reason = 70, "name_contains"
+
+        if score is not None:
+            matches.append({**item, "score": score, "reason": reason})
+
+    matches.sort(key=lambda x: (-x["score"], x["code"]))
+    limited = matches[:20]
+    return {"query": query, "rows": limited, "row_count": len(limited), "total_matches": len(matches)}
 
 
 # ---------- handlers ----------
@@ -778,6 +875,7 @@ def get_industry_compare(code: str) -> dict:
 
 
 ROUTES = {
+    "/search": get_stock_search,
     "/profile": get_company_profile,
     "/financial": get_financial_indicator,
     "/valuation": get_valuation,
@@ -816,8 +914,10 @@ class Handler(BaseHTTPRequestHandler):
 
         qs = parse_qs(url.query)
         code = (qs.get("code", [""])[0] or "").strip()
+        if path == "/search":
+            code = (qs.get("q", [""])[0] or code).strip()
         if not code:
-            self._json(400, {"error": "missing ?code=600519"})
+            self._json(400, {"error": "missing ?code=600519 or ?q=茅台"})
             return
 
         try:
@@ -831,7 +931,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    host, port = "127.0.0.1", 9876
+    host = os.environ.get("DATA_SIDECAR_HOST", "127.0.0.1")
+    port = int(os.environ.get("DATA_SIDECAR_PORT", "9876"))
     print(f"[sidecar] listening on http://{host}:{port}")
     print(f"[sidecar] routes: {list(ROUTES.keys()) + ['/healthz']}")
     ThreadingHTTPServer((host, port), Handler).serve_forever()

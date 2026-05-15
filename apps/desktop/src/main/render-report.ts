@@ -178,6 +178,7 @@ export function renderReportHTML(args: RenderArgs): string {
   const j = args.judge ?? {};
   const code = j.code ?? "—";
   const name = j.name ?? "";
+  const stockTitle = name ? `${name} ${code}` : String(code);
   const asOf = j.as_of ?? args.fetchedAt.slice(0, 10);
 
   const sB = j.scores?.business?.value ?? null;
@@ -214,7 +215,7 @@ export function renderReportHTML(args: RenderArgs): string {
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<title>${esc(code)} ${esc(name)} · 价投合伙人报告</title>
+<title>${esc(stockTitle)} · 价投合伙人报告</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 <style>
@@ -325,7 +326,7 @@ export function renderReportHTML(args: RenderArgs): string {
 <div class="wrap">
 
   <header>
-    <h1>${esc(code)} ${esc(name)}</h1>
+    <h1>${esc(stockTitle)}</h1>
     <span class="meta">分析日期 ${esc(asOf)} · 拉取时间 ${esc(args.fetchedAt)}</span>
   </header>
 
@@ -857,4 +858,3 @@ export function renderReviewError(message: string, reviewedAt: string): string {
   </div>
   <!-- REVIEW_SLOT_END -->`;
 }
-

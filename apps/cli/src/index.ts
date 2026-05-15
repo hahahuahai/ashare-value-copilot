@@ -57,10 +57,7 @@ async function cmdPing() {
 }
 
 async function cmdAsk(code: string) {
-  if (!/^\d{6}$/.test(code)) {
-    console.error(kleur.red(`股票代码格式错误：${code}`), kleur.dim("应为 6 位数字，例如 600519"));
-    process.exit(1);
-  }
+  const input = code.trim();
 
   // 1. 探活
   if (!(await data.health())) {
@@ -68,10 +65,34 @@ async function cmdAsk(code: string) {
     process.exit(1);
   }
 
+  const codeInInput = input.match(/\b(\d{6})\b/)?.[1];
+  if (codeInInput) {
+    code = codeInInput;
+  } else {
+    const found = await data.searchStocks(input);
+    const first = found.rows?.[0];
+    if (!first) {
+      console.error(kleur.red(`未找到匹配的 A 股公司：${input}`));
+      process.exit(1);
+    }
+    if ((found.rows?.length ?? 0) > 1) {
+      const preview = found.rows.slice(0, 5).map((r: any) => `${r.code} ${r.name}`).join(" / ");
+      console.log(kleur.dim(`匹配候选：${preview}`));
+    }
+    code = first.code;
+    console.log(kleur.cyan(`已匹配：${first.code} ${first.name}`));
+  }
+
+  if (!/^\d{6}$/.test(code)) {
+    console.error(kleur.red(`股票代码格式错误：${code}`), kleur.dim("应为 6 位数字，例如 600519"));
+    process.exit(1);
+  }
+
   // 2. 拉数据
   console.log(kleur.cyan("🔍 拉取数据..."), code);
   const pack = await buildDataPack(code);
   const name = (pack.quote as any)?.name ?? (pack.profile as any)?.["股票简称"] ?? "";
+  const displayName = name ? `${name} ${code}` : code;
 
   // 3. v0.2.0：循环跑所有默认启用的大师
   const enabledIds = defaultEnabledMasterIds();
@@ -93,7 +114,7 @@ async function cmdAsk(code: string) {
   await mkdir(dir, { recursive: true });
   const mdSections = results.map((r) => `## ${r.displayName}\n${r.text}`);
   const md = [
-    `# ${code} ${name} · 价投合伙人报告`,
+    `# ${displayName} · 价投合伙人报告`,
     ``,
     `> 生成于 ${pack.fetched_at}`,
     ``,

@@ -17,6 +17,12 @@ export interface ReportItem {
   type: "md" | "html";
   mtime: number;
 }
+export interface StockSearchResult {
+  code: string;
+  name: string;
+  score?: number;
+  reason?: string;
+}
 
 /** v0.2.0：大师定义（从 main 传到 renderer） */
 export interface MasterInfo {
@@ -29,6 +35,7 @@ export interface MasterInfo {
 export interface VCApi {
   health: () => Promise<{ ok: boolean; sidecarUrl: string; model: string }>;
   ensureSidecar: () => Promise<boolean>;
+  searchStocks: (query: string) => Promise<StockSearchResult[]>;
   listReports: () => Promise<ReportItem[]>;
   readReport: (path: string) => Promise<string>;
   fileUrl: (path: string) => Promise<string>;
@@ -60,6 +67,7 @@ const sub = (channel: string, cb: (p: any) => void) => {
 const api: VCApi = {
   health: () => ipcRenderer.invoke("health"),
   ensureSidecar: () => ipcRenderer.invoke("ensure-sidecar"),
+  searchStocks: (query) => ipcRenderer.invoke("search-stocks", query),
   listReports: () => ipcRenderer.invoke("list-reports"),
   readReport: (path) => ipcRenderer.invoke("read-report", path),
   fileUrl: (path) => ipcRenderer.invoke("file-url", path),

@@ -14,6 +14,15 @@ async function call<T = unknown>(path: string, code: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function callQuery<T = unknown>(path: string, query: string): Promise<T> {
+  const url = `${SIDECAR}${path}?q=${encodeURIComponent(query)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`[data] ${path} ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as T;
+}
+
 export interface CompanyProfile {
   code: string;
   [key: string]: string | null | undefined;
@@ -81,8 +90,22 @@ export interface IndustryCompare {
   row_count?: number;
   error?: string;
 }
+export interface StockSearchResult {
+  code: string;
+  name: string;
+  score?: number;
+  reason?: string;
+}
+export interface StockSearchResponse {
+  query: string;
+  rows: StockSearchResult[];
+  row_count: number;
+  total_matches?: number;
+  error?: string;
+}
 
 export const data = {
+  searchStocks: (query: string) => callQuery<StockSearchResponse>("/search", query),
   profile: (code: string) => call<CompanyProfile>("/profile", code),
   financial: (code: string) => call<FinancialIndicator>("/financial", code),
   valuation: (code: string) => call<ValuationSnapshot>("/valuation", code),

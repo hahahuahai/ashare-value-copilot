@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { VCApi, MasterInfo } from "../../preload";
+import type { VCApi, MasterInfo, StockSearchResult } from "../../preload";
 import { SettingsModal } from "./SettingsModal";
 
 declare global {
@@ -154,8 +154,21 @@ function fmtBig(n: any): string {
   return v.toLocaleString("zh-CN");
 }
 
+function stockLabel(name?: string | null, code?: string | null): string {
+  if (name && code) return `${name} ${code}`;
+  return code ?? name ?? "";
+}
+
+function extractStockCode(input: string): string | null {
+  return input.match(/\b(\d{6})\b/)?.[1] ?? null;
+}
+
 export default function App() {
   const [code, setCode] = useState("600519");
+  const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [statusText, setStatusText] = useState<string>("就绪 — 输入代码后回车开始");
   const [pack, setPack] = useState<DataPackInfo | null>(null);
@@ -176,6 +189,7 @@ export default function App() {
   const [historyReviewMsg, setHistoryReviewMsg] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [forcedSetup, setForcedSetup] = useState(false);
+  const searchCacheRef = useRef<Record<string, StockSearchResult[]>>({});
 
   const refreshHealth = async () => setHealthInfo(await window.vc.health());
   const refreshReports = async () => setReports(await window.vc.listReports());
@@ -224,7 +238,10 @@ export default function App() {
         });
       }
     });
-    const offD = window.vc.onDataPack((p: any) => setPack(p));
+    const offD = window.vc.onDataPack((p: any) => {
+      setPack(p);
+      if (p?.code) setCode(stockLabel(p?.name, p?.code));
+    });
     const offC = window.vc.onChunk(({ master, phase: chunkPhase, delta }: { master: string; phase: "thinking" | "answer"; delta: string }) => {
       setMasterStates((prev) => {
         const cur = prev[master] ?? { thinking: "", answer: "", active: false, done: false };
@@ -242,9 +259,59 @@ export default function App() {
     return () => { offS(); offD(); offC(); offN(); };
   }, []);
 
+  useEffect(() => {
+    const q = code.trim();
+    if (!q || extractStockCode(q)) {
+      setSearchResults([]);
+      setSearchOpen(false);
+      setSearching(false);
+      setSearchError(null);
+      return;
+    }
+
+    let cancelled = false;
+    const cached = searchCacheRef.current[q];
+    if (cached) {
+      setSearchResults(cached);
+      setSearchOpen(true);
+      setSearching(false);
+      setSearchError(null);
+      return;
+    }
+
+    setSearching(true);
+    setSearchError(null);
+    setSearchOpen(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const rows = await window.vc.searchStocks(q);
+        if (!cancelled) {
+          searchCacheRef.current[q] = rows;
+          setSearchResults(rows);
+          setSearchOpen(true);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setSearchResults([]);
+          setSearchError(String(e?.message ?? e));
+          setSearchOpen(true);
+        }
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 120);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [code]);
+
   const onAnalyze = async () => {
-    if (!/^\d{6}$/.test(code)) { setError("股票代码须是 6 位数字"); return; }
+    const input = code.trim();
+    if (!input) { setError("请输入股票代码或公司简称"); return; }
     setError(null);
+    setSearchOpen(false);
     setPhase("fetching");
     setStatusText("启动中...");
     setPack(null);
@@ -261,7 +328,7 @@ export default function App() {
     }
     setMasterStates(init);
     try {
-      await window.vc.ask(code);
+      await window.vc.ask(input);
     } catch (e: any) {
       setPhase("error");
       setError(String(e?.message ?? e));
@@ -396,14 +463,49 @@ export default function App() {
         <main className="flex-1 flex flex-col min-w-0 p-4 gap-3 overflow-hidden">
           {/* 输入栏 */}
           <div className="flex items-center gap-2">
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              onKeyDown={(e) => { if (e.key === "Enter") onAnalyze(); }}
-              placeholder="600519"
-              disabled={phase !== "idle" && phase !== "done" && phase !== "error"}
-              className="bg-panel border border-line rounded px-3 py-2 text-base w-40 focus:outline-none focus:border-gold disabled:opacity-50 font-mono tracking-wider"
-            />
+            <div className="relative">
+              <input
+                value={code}
+                onChange={(e) => {
+                  setCode(e.target.value.trimStart().slice(0, 24));
+                  setSearchOpen(true);
+                }}
+                onFocus={() => { if (searchResults.length > 0) setSearchOpen(true); }}
+                onKeyDown={(e) => { if (e.key === "Enter") onAnalyze(); }}
+                placeholder="600519 / 贵州茅台"
+                disabled={phase !== "idle" && phase !== "done" && phase !== "error"}
+                className="bg-panel border border-line rounded px-3 py-2 text-base w-56 focus:outline-none focus:border-gold disabled:opacity-50"
+              />
+              {searchOpen && (searching || searchError || searchResults.length > 0 || (code.trim() && !/^\d{6}$/.test(code.trim()))) && (
+                <div className="absolute z-20 mt-1 w-72 max-h-72 overflow-y-auto rounded border border-line bg-panel shadow-xl">
+                  {searching && (
+                    <div className="px-3 py-2 text-xs text-mute">搜索中...</div>
+                  )}
+                  {!searching && searchError && (
+                    <div className="px-3 py-2 text-xs text-red-soft">搜索失败：{searchError}</div>
+                  )}
+                  {!searching && !searchError && searchResults.length === 0 && (
+                    <div className="px-3 py-2 text-xs text-mute">没有匹配的 A 股公司</div>
+                  )}
+                  {searchResults.slice(0, 8).map((r) => (
+                    <button
+                      key={r.code}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setCode(stockLabel(r.name, r.code));
+                        setSearchOpen(false);
+                        setSearchResults([]);
+                      }}
+                      className="w-full px-3 py-2 text-left hover:bg-panel2 flex items-center justify-between gap-3"
+                    >
+                      <span className="text-sm text-ink">{r.name}</span>
+                      <span className="text-xs text-gold font-mono">{r.code}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button
               onClick={onAnalyze}
               disabled={phase !== "idle" && phase !== "done" && phase !== "error"}
@@ -418,7 +520,7 @@ export default function App() {
               <>
                 {savedHtmlUrl && (
                   <button
-                    onClick={() => setViewing({ title: `${pack?.code ?? code} · 最新报告`, htmlUrl: savedHtmlUrl })}
+                    onClick={() => setViewing({ title: `${stockLabel(pack?.name, pack?.code) || code} · 最新报告`, htmlUrl: savedHtmlUrl })}
                     className="bg-gold hover:bg-amber text-stage px-3 py-1 rounded text-xs font-semibold"
                   >
                     📊 查看 HTML 报告
@@ -458,7 +560,7 @@ export default function App() {
           {pack && (
             <div className="bg-panel rounded-lg border border-line px-4 py-3">
               <div className="flex items-baseline gap-2 mb-2">
-                <h2 className="text-base font-semibold text-ink">{pack.code} {pack.name}</h2>
+                <h2 className="text-base font-semibold text-ink">{stockLabel(pack.name, pack.code)}</h2>
                 <span className="text-mute text-xs">财报 {pack.financial_rows} 期 · 拉取 {new Date(pack.fetched_at).toLocaleTimeString("zh-CN")}</span>
               </div>
               <div className="grid grid-cols-6 gap-2">
