@@ -11,9 +11,8 @@ const venvDir = join(sidecarDir, ".venv-build");
 const distDir = join(sidecarDir, "dist");
 const buildDir = join(sidecarDir, "build");
 const entry = join(sidecarDir, "main.py");
-const bundleDir = join(distDir, "value-copilot-sidecar");
 const exeName = process.platform === "win32" ? "value-copilot-sidecar.exe" : "value-copilot-sidecar";
-const exePath = join(bundleDir, exeName);
+const exePath = join(distDir, exeName);
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -63,13 +62,11 @@ if (!existsSync(entry)) {
 if (clean) {
   removePath(venvDir);
   removePath(buildDir);
-  removePath(bundleDir);
   removePath(join(distDir, "value-copilot-sidecar.exe"));
   removePath(join(distDir, "value-copilot-sidecar"));
 }
 
 mkdirSync(distDir, { recursive: true });
-removePath(bundleDir);
 removePath(join(distDir, "value-copilot-sidecar.exe"));
 removePath(join(distDir, "value-copilot-sidecar"));
 
@@ -91,6 +88,7 @@ run(
     "-m",
     "PyInstaller",
     "--clean",
+    "--onefile",
     "--collect-data",
     "akshare",
     "--name",

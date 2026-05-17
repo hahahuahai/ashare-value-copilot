@@ -15,6 +15,7 @@ import { resolve, dirname, join } from "node:path";
 import { buildDataPack, data } from "@vc/data";
 import {
   runMasterStream, runJudge, extractJudgeJSON, runReview, extractReviewJSON,
+  runWorkbenchTask,
   type MasterAnalysis,
 } from "@vc/agents";
 import { MASTERS, getMaster, defaultEnabledMasterIds, type MasterDef } from "@vc/agents";
@@ -24,10 +25,21 @@ const here = __dirname;
 
 // === Python 边车管理 ===
 let sidecarProc: ChildProcess | null = null;
+let sidecarStarting: Promise<boolean> | null = null;
 const SIDECAR_URL = process.env.DATA_SIDECAR_URL ?? "http://127.0.0.1:9876";
 
 async function ensureSidecar(): Promise<boolean> {
   if (await data.health()) return true;
+  if (sidecarStarting) return await sidecarStarting;
+  sidecarStarting = startSidecar();
+  try {
+    return await sidecarStarting;
+  } finally {
+    sidecarStarting = null;
+  }
+}
+
+async function startSidecar(): Promise<boolean> {
   const bundledExeName = process.platform === "win32" ? "value-copilot-sidecar.exe" : "value-copilot-sidecar";
   const bundledExe = [
     resolve(RES_ROOT, "sidecar", "value-copilot-sidecar", bundledExeName),
@@ -124,6 +136,66 @@ function killSidecar() {
 
 // === 历史报告（写入用户数据目录，不污染只读资源） ===
 const REPORTS_DIR = resolve(USER_ROOT, "reports");
+
+function safeFilePart(value: string): string {
+  return String(value ?? "")
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .replace(/\s+/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+}
+
+function reportBaseName(code: string, name: string, date: string): string {
+  const safeName = safeFilePart(name);
+  return safeName ? `${safeName}-${code}-${date}` : `${code}-${date}`;
+}
+
+function parseReportName(file: string): { code: string; name: string; date: string; type: "md" | "html" } | null {
+  const byName = file.match(/^(.+)-(\d{6})-(\d{4}-\d{2}-\d{2})\.(md|html)$/);
+  if (byName) {
+    return {
+      name: byName[1],
+      code: byName[2],
+      date: byName[3],
+      type: byName[4] as "md" | "html",
+    };
+  }
+  const legacy = file.match(/^(\d{6})-(\d{4}-\d{2}-\d{2})\.(md|html)$/);
+  if (legacy) {
+    return {
+      name: "",
+      code: legacy[1],
+      date: legacy[2],
+      type: legacy[3] as "md" | "html",
+    };
+  }
+  return null;
+}
+
+async function resolveStockName(code: string, pack: any): Promise<string> {
+  const direct = [
+    pack?.quote?.name,
+    pack?.quote?.["股票简称"],
+    pack?.profile?.name,
+    pack?.profile?.["股票简称"],
+    pack?.profile?.["A股简称"],
+    pack?.profile?.["证券简称"],
+    pack?.profile?.["公司简称"],
+  ]
+    .map((x) => String(x ?? "").trim())
+    .find(Boolean);
+  if (direct) return direct;
+
+  try {
+    const rows = (await data.searchStocks(code))?.rows ?? [];
+    return rows.find((x) => x.code === code)?.name ?? "";
+  } catch {
+    return "";
+  }
+}
+
 function listReports() {
   if (!existsSync(REPORTS_DIR)) return [];
   return readdirSync(REPORTS_DIR)
@@ -131,13 +203,15 @@ function listReports() {
     .map((f) => {
       const path = join(REPORTS_DIR, f);
       const stat = statSync(path);
-      const m = f.match(/^(\d{6})-(\d{4}-\d{2}-\d{2})\.(md|html)$/);
+      const parsed = parseReportName(f);
+      const fallbackType = f.endsWith(".html") ? "html" : "md";
       return {
         file: f,
         path,
-        code: m?.[1] ?? "",
-        date: m?.[2] ?? "",
-        type: (m?.[3] ?? "md") as "md" | "html",
+        name: parsed?.name ?? "",
+        code: parsed?.code ?? "",
+        date: parsed?.date ?? "",
+        type: parsed?.type ?? fallbackType,
         mtime: stat.mtime.getTime(),
       };
     })
@@ -169,6 +243,7 @@ function saveReport(
   const date = new Date().toISOString().slice(0, 10);
   if (!existsSync(REPORTS_DIR)) mkdirSync(REPORTS_DIR, { recursive: true });
   const displayName = name ? `${name} ${code}` : code;
+  const fileBase = reportBaseName(code, name, date);
 
   // Markdown 版本（保留向后兼容 — 用动态大师段，老 parseLegacyMd 仍能读 buffett/duan 段）
   const mdSections = analyses.map((a) => {
@@ -195,7 +270,7 @@ function saveReport(
     `---`,
     `⚠️ 本报告仅用于研究辅助，不构成任何买卖建议。`,
   ].join("\n");
-  const mdPath = join(REPORTS_DIR, `${code}-${date}.md`);
+  const mdPath = join(REPORTS_DIR, `${fileBase}.md`);
   writeFileSync(mdPath, md, "utf-8");
 
   // HTML 版本（主产物）
@@ -233,15 +308,15 @@ function saveReport(
       warnings: collectWarnings(),
     },
   });
-  const htmlPath = join(REPORTS_DIR, `${code}-${date}.html`);
+  const htmlPath = join(REPORTS_DIR, `${fileBase}.html`);
   writeFileSync(htmlPath, html, "utf-8");
 
   // 裁判原始输出
-  writeFileSync(join(REPORTS_DIR, `${code}-${date}.judge.txt`), judgeRaw, "utf-8");
+  writeFileSync(join(REPORTS_DIR, `${fileBase}.judge.txt`), judgeRaw, "utf-8");
 
   // payload.json（review 所需的全部原料）
   try {
-    const payloadPath = join(REPORTS_DIR, `${code}-${date}.payload.json`);
+    const payloadPath = join(REPORTS_DIR, `${fileBase}.payload.json`);
     writeFileSync(
       payloadPath,
       JSON.stringify({
@@ -476,7 +551,8 @@ ipcMain.handle("ask", async (event, code: string) => {
 
   send("ask:status", { phase: "fetching", text: `🔍 拉取数据 ${code}...` });
   const pack = await buildDataPack(code);
-  const name = (pack.quote as any)?.name ?? (pack.profile as any)?.["股票简称"] ?? "";
+  const name = await resolveStockName(code, pack);
+  (pack as any).name = name;
   send("ask:data-pack", {
     code,
     name,
@@ -696,6 +772,21 @@ ipcMain.handle("review", async (_event, htmlPath: string): Promise<{ ok: boolean
     console.error("[review]", e);
     return { ok: false, error: e?.message ?? "复核失败" };
   }
+});
+
+ipcMain.handle("ai-task", async (_event, kind: string, context: any) => {
+  const allowed = new Set([
+    "daily-brief",
+    "watchlist-organize",
+    "screener-explain",
+    "risk-explain",
+    "archive-summary",
+    "compare-explain",
+    "principles-coach",
+    "report-editor",
+  ]);
+  if (!allowed.has(kind)) return { title: "AI 助手", summary: "", bullets: [], actions: [], warnings: [`未知任务：${kind}`] };
+  return await runWorkbenchTask(kind as any, context);
 });
 
 // === Lifecycle ===

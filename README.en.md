@@ -49,18 +49,60 @@ This project takes the opposite route:
 - **Circle-of-competence gatekeeping**: if the business is not understandable, the agent is allowed to refuse analysis.
 - **Anti-hallucination by design**: all numbers must come from fetched data, not model arithmetic.
 - **AI reviewer**: a separate reviewer agent checks citations, contradictions, and valuation leaps.
-- **Desktop app**: Electron app with Windows NSIS / portable and macOS DMG / ZIP builds, plus a bundled data sidecar.
+- **Desktop research desk**: Electron app with Windows NSIS / portable and macOS PKG / DMG / ZIP builds, plus a bundled data sidecar.
+- **Watchlist and company archive**: turn one-off reports into long-term tracked companies with verdicts, notes, and report history.
+- **Local screener, risk radar, and comparison**: screen local snapshots, inspect risk flags, and compare valuation notes across companies.
 - **Bring your own API key**: OpenAI-compatible providers including Tencent Cloud LKEAP, DeepSeek, DashScope, Zhipu GLM, Kimi, Doubao, SiliconFlow, OpenRouter, Ollama, OpenAI, Grok, and custom endpoints.
 
 ---
+
+## Desktop Research Desk
+
+The desktop app is more than a report generator. It is a local research workflow for repeated company tracking:
+
+| Module | What it does |
+|---|---|
+| **Analysis** | Enter a code or company name, fetch a `DataPack`, run value-investing agents, and generate HTML / Markdown reports. |
+| **AI Reviewer** | Review an HTML report for factual, logical, and relevance issues, then write the review card back into the report. |
+| **Watchlist** | Add analyzed companies to a local watchlist with verdicts, groups, and notes. |
+| **Screener** | Filter watchlist snapshots by PE, PB, and group before spending LLM budget on deeper research. |
+| **Company Archive** | Group historical reports, verdicts, and notes by company. |
+| **Risk Radar** | Surface valuation, leverage, weak ROE, and data-quality flags from the current snapshot. |
+| **Comparison** | Compare two companies side by side by PE, PB, market cap, verdict, and notes. |
+| **Principles** | Maintain your own circle-of-competence rules and exclusion checklist locally. |
+| **Export** | Generate a Markdown research summary for Obsidian, Notion, or long-form drafts. |
+
+Suggested workflow:
+
+```text
+Analyze one company → run AI review → add to watchlist → screen locally → track in archive → compare / review risks → export summary
+```
+
+### AI Copilot Layer
+
+The workbench includes a unified AI Copilot Layer. Each module exposes a focused AI action, so users do not need to write prompts manually:
+
+| AI action | Use case |
+|---|---|
+| **AI Daily Brief** | Generate next-step research reminders from the current snapshot, watchlist, principles, and report history. |
+| **AI Watchlist Organizer** | Group watchlist companies, summarize tracking reasons, and suggest which names deserve attention first. |
+| **AI Screener Explanation** | Explain what the filters mean, why companies passed, and why others should wait. |
+| **AI Risk Explanation** | Turn risk radar flags into a practical verification checklist. |
+| **AI Archive Summary** | Summarize judgment changes, durable theses, and next research questions for one company. |
+| **AI Comparison** | Compare two companies and explain which one is closer to the user's principles. |
+| **AI Principles Coach** | Convert natural-language investing principles into actionable screening and exclusion rules. |
+| **AI Summary / Rewrite** | Convert reports or exports into cleaner review/share drafts. |
+
+All AI actions share the same guardrails: they only use the current page context, `DataPack`, reports, and user principles; they do not invent unsourced numbers; and they do not provide buy/sell recommendations.
 
 ## Usage
 
 ### A. Desktop App, Recommended
 
-1. Download `价投合伙人-0.2.2-x64.exe`, `价投合伙人-0.2.2-portable.exe`, or the macOS `.dmg / .zip` package from [Releases](https://github.com/hahahuahai/ashare-value-copilot/releases).
+1. Download `价投合伙人-0.2.2-x64.exe`, `价投合伙人-0.2.2-portable.exe`, or the macOS `.pkg / .dmg / .zip` package from [Releases](https://github.com/hahahuahai/ashare-value-copilot/releases).
 2. On first launch, fill in `LLM_BASE_URL`, `API_KEY`, and `MODEL`.
 3. Enter a stock code or company name, for example `600519`, `贵州茅台`, or `中国平安`, then run the analysis.
+4. Run the AI reviewer, then add the company to the watchlist for long-term tracking.
 
 The desktop package starts a bundled `value-copilot-sidecar`, so normal users do not need to install Python. Developers can still run the source sidecar with `pnpm sidecar`.
 
@@ -72,8 +114,7 @@ pnpm install
 pnpm desktop:dist:mac
 ```
 
-The current macOS target produces Apple Silicon (`arm64`) DMG / ZIP artifacts. For public distribution, configure Apple Developer ID signing and notarization; unsigned local test builds may need to be allowed from macOS System Settings.
-On macOS, the build command also generates `resources/icon.icns` from the existing PNG with the system `sips` / `iconutil` tools.
+The current macOS target produces Apple Silicon (`arm64`) PKG / DMG / ZIP artifacts. The PKG installs the app into `/Applications`; the package includes the Electron app and the PyInstaller-built `value-copilot-sidecar`, so normal users do not need Node, pnpm, Python, or akshare. On macOS, the build command also generates `resources/icon.icns` from the existing PNG with the system `sips` / `iconutil` tools. For public distribution, configure Apple Developer ID signing and notarization; unsigned local test builds may need to be allowed from macOS System Settings.
 
 ### 30-second Quick Start
 
@@ -224,7 +265,8 @@ services/data-sidecar (Python + akshare)
 - [x] AI reviewer with retry and JSON recovery
 - [x] Multi-agent value-investing council
 - [x] Fuzzy A-share company/code search
-- [ ] Circle-of-competence archive
+- [x] Desktop research desk: watchlist, screener, company archive, risk radar, comparison, principles, and Markdown export
+- [ ] Background watchlist refresh with SQLite persistence
 - [ ] Position weekly reports
 - [ ] Web UI with visualized council flow
 

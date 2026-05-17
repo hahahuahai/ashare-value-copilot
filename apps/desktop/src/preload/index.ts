@@ -12,6 +12,7 @@ export interface AppConfig {
 export interface ReportItem {
   file: string;
   path: string;
+  name: string;
   code: string;
   date: string;
   type: "md" | "html";
@@ -42,6 +43,7 @@ export interface VCApi {
   openReportsDir: () => Promise<void>;
   ask: (code: string) => Promise<{ path: string; mdPath: string }>;
   review: (htmlPath: string) => Promise<{ ok: boolean; score?: number; level?: string; issues?: number; error?: string; mode?: "standard" | "legacy" }>;
+  aiTask: (kind: string, context: any) => Promise<{ title: string; summary: string; bullets: string[]; actions: string[]; warnings: string[]; error?: string }>;
   onStatus: (cb: (p: { phase: string; text: string; path?: string; mdPath?: string }) => void) => () => void;
   onDataPack: (cb: (p: any) => void) => () => void;
   /** v0.2.0：master 字段从 "buffett"|"duan" 变成任意 string（大师 id） */
@@ -74,6 +76,7 @@ const api: VCApi = {
   openReportsDir: () => ipcRenderer.invoke("open-reports-dir"),
   ask: (code) => ipcRenderer.invoke("ask", code),
   review: (htmlPath) => ipcRenderer.invoke("review", htmlPath),
+  aiTask: (kind, context) => ipcRenderer.invoke("ai-task", kind, context),
   onStatus: (cb) => sub("ask:status", cb),
   onDataPack: (cb) => sub("ask:data-pack", cb),
   onChunk: (cb) => sub("ask:chunk", cb),

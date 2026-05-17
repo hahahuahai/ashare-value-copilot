@@ -26,6 +26,7 @@ interface DataPackInfo {
 interface ReportItem {
   file: string;
   path: string;
+  name: string;
   code: string;
   date: string;
   type: "md" | "html";
@@ -39,6 +40,54 @@ interface MasterState {
   active: boolean;
   done: boolean;
 }
+
+type WorkspaceTab = "analysis" | "watchlist" | "screener" | "archive" | "risk" | "compare" | "principles" | "export";
+
+interface WatchItem {
+  code: string;
+  name: string;
+  group: string;
+  verdict: string;
+  note: string;
+  updatedAt: string;
+  price?: number | null;
+  pe?: number | null;
+  pb?: number | null;
+  marketCap?: number | null;
+  financialRows?: number;
+}
+
+interface Principle {
+  id: string;
+  text: string;
+  enabled: boolean;
+}
+
+interface RiskSignal {
+  level: "high" | "mid" | "low";
+  title: string;
+  detail: string;
+}
+
+interface AiTaskResult {
+  title: string;
+  summary: string;
+  bullets: string[];
+  actions: string[];
+  warnings: string[];
+  error?: string;
+}
+
+const workspaceTabs: Array<{ id: WorkspaceTab; label: string; hint: string }> = [
+  { id: "analysis", label: "分析", hint: "单家公司报告" },
+  { id: "watchlist", label: "自选", hint: "长期跟踪池" },
+  { id: "screener", label: "筛选", hint: "候选研究池" },
+  { id: "archive", label: "档案", hint: "公司历史" },
+  { id: "risk", label: "风险", hint: "财务雷达" },
+  { id: "compare", label: "对比", hint: "横向比较" },
+  { id: "principles", label: "原则", hint: "个人投资清单" },
+  { id: "export", label: "导出", hint: "复用摘要" },
+];
 
 function StatBadge({ phase, enabledMasters }: { phase: Phase; enabledMasters: MasterInfo[] }) {
   if (phase === "idle") return <span className="px-2 py-0.5 rounded text-xs bg-panel2 text-mute border border-line">就绪</span>;
@@ -163,7 +212,111 @@ function extractStockCode(input: string): string | null {
   return input.match(/\b(\d{6})\b/)?.[1] ?? null;
 }
 
+function readJson<T>(key: string, fallback: T): T {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) as T : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJson<T>(key: string, value: T) {
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function watchFromPack(pack: DataPackInfo, previous?: WatchItem): WatchItem {
+  const valuation = pack.valuation ?? {};
+  const quote = pack.quote ?? {};
+  return {
+    code: pack.code,
+    name: pack.name,
+    group: previous?.group ?? "核心观察",
+    verdict: previous?.verdict ?? "待判断",
+    note: previous?.note ?? "",
+    updatedAt: new Date().toISOString(),
+    price: Number.isFinite(Number(quote.price)) ? Number(quote.price) : null,
+    pe: Number.isFinite(Number(valuation.pe_ttm)) ? Number(valuation.pe_ttm) : null,
+    pb: Number.isFinite(Number(valuation.pb)) ? Number(valuation.pb) : null,
+    marketCap: Number.isFinite(Number(valuation.total_mv)) ? Number(valuation.total_mv) : null,
+    financialRows: pack.financial_rows,
+  };
+}
+
+function riskSignalsFromPack(pack: DataPackInfo | null): RiskSignal[] {
+  if (!pack) return [];
+  const v = pack.valuation ?? {};
+  const rows = Array.isArray((pack as any).financial?.rows) ? (pack as any).financial.rows : [];
+  const latest = rows[0] ?? {};
+  const signals: RiskSignal[] = [];
+  const pe = Number(v.pe_ttm);
+  const pb = Number(v.pb);
+  const debt = Number(latest.debt_to_assets ?? latest.asset_liability_ratio ?? latest["资产负债率"]);
+  const roe = Number(latest.roe ?? latest.roe_weighted ?? latest["净资产收益率"]);
+
+  if (Number.isFinite(pe) && pe > 35) signals.push({ level: "mid", title: "估值偏高", detail: `PE TTM ${fmt(pe)}，需要更强的增长和确定性支撑。` });
+  if (Number.isFinite(pb) && pb > 6) signals.push({ level: "mid", title: "PB 偏高", detail: `PB ${fmt(pb)}，需确认 ROE 可持续性。` });
+  if (Number.isFinite(debt) && debt > 65) signals.push({ level: "high", title: "杠杆较高", detail: `资产负债率约 ${fmt(debt)}%，需要检查现金流和偿债压力。` });
+  if (Number.isFinite(roe) && roe < 8) signals.push({ level: "mid", title: "ROE 偏弱", detail: `最近一期 ROE ${fmt(roe)}%，股东回报质量需要复核。` });
+  if (!rows.length && (pack.financial_rows ?? 0) === 0) signals.push({ level: "low", title: "财务明细不足", detail: "当前快照缺少可用于趋势判断的财务行。" });
+  if (signals.length === 0) signals.push({ level: "low", title: "未发现明显红灯", detail: "当前快照未触发基础风险规则，仍需结合报告和原始财报复核。" });
+  return signals;
+}
+
+function AiInsightPanel({
+  result,
+  busy,
+  onClose,
+}: {
+  result: AiTaskResult | null;
+  busy: boolean;
+  onClose: () => void;
+}) {
+  if (!result && !busy) return null;
+  return (
+    <div className="bg-panel rounded-lg border border-line shadow-[var(--shadow-soft)] backdrop-blur-xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-line flex items-center gap-3">
+        <div className="w-7 h-7 rounded bg-ink text-white flex items-center justify-center text-xs font-semibold">AI</div>
+        <div className="flex-1">
+          <div className="text-sm font-semibold text-ink">{busy ? "AI 助手思考中..." : result?.title}</div>
+          <div className="text-xs text-mute">只基于当前页面上下文整理，不新增事实或数字。</div>
+        </div>
+        <button onClick={onClose} className="text-mute hover:text-ink text-sm">关闭</button>
+      </div>
+      {busy ? (
+        <div className="px-4 py-4 text-sm text-mute">正在生成结构化建议，通常需要几秒到几十秒。</div>
+      ) : result && (
+        <div className="px-4 py-3 grid grid-cols-[1.2fr_1fr] gap-4">
+          <div>
+            <div className="text-sm text-ink leading-relaxed">{result.summary || "暂无摘要。"}</div>
+            {result.bullets.length > 0 && (
+              <ul className="mt-3 space-y-1.5 text-xs text-mute">
+                {result.bullets.map((x, i) => <li key={i}>• {x}</li>)}
+              </ul>
+            )}
+          </div>
+          <div className="space-y-2">
+            {result.actions.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold text-ink mb-1">下一步</div>
+                <ul className="space-y-1 text-xs text-mute">{result.actions.map((x, i) => <li key={i}>• {x}</li>)}</ul>
+              </div>
+            )}
+            {result.warnings.length > 0 && (
+              <div className="bg-amber/10 border border-amber/20 rounded px-3 py-2">
+                <div className="text-xs font-semibold text-amber mb-1">提醒</div>
+                <ul className="space-y-1 text-xs text-mute">{result.warnings.map((x, i) => <li key={i}>• {x}</li>)}</ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
+  const [workspace, setWorkspace] = useState<WorkspaceTab>("analysis");
   const [code, setCode] = useState("600519");
   const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -189,7 +342,21 @@ export default function App() {
   const [historyReviewMsg, setHistoryReviewMsg] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [forcedSetup, setForcedSetup] = useState(false);
+  const [watchlist, setWatchlist] = useState<WatchItem[]>(() => readJson<WatchItem[]>("vc.watchlist", []));
+  const [principles, setPrinciples] = useState<Principle[]>(() => readJson<Principle[]>("vc.principles", [
+    { id: "p1", text: "不研究无法理解商业模式的公司。", enabled: true },
+    { id: "p2", text: "优先关注长期高 ROE、低杠杆、现金流健康的公司。", enabled: true },
+    { id: "p3", text: "估值没有安全边际时，只观察，不行动。", enabled: true },
+  ]));
+  const [selectedArchiveCode, setSelectedArchiveCode] = useState("");
+  const [screen, setScreen] = useState({ maxPe: "35", maxPb: "6", group: "全部" });
+  const [compareCodes, setCompareCodes] = useState<[string, string]>(["", ""]);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiResult, setAiResult] = useState<AiTaskResult | null>(null);
   const searchCacheRef = useRef<Record<string, StockSearchResult[]>>({});
+
+  useEffect(() => writeJson("vc.watchlist", watchlist), [watchlist]);
+  useEffect(() => writeJson("vc.principles", principles), [principles]);
 
   const refreshHealth = async () => setHealthInfo(await window.vc.health());
   const refreshReports = async () => setReports(await window.vc.listReports());
@@ -367,14 +534,110 @@ export default function App() {
     ];
   }, [pack]);
 
+  const activeWatch = useMemo(() => {
+    const currentCode = pack?.code ?? extractStockCode(code) ?? selectedArchiveCode;
+    return watchlist.find((x) => x.code === currentCode) ?? null;
+  }, [watchlist, pack, code, selectedArchiveCode]);
+
+  const groups = useMemo(() => Array.from(new Set(watchlist.map((x) => x.group || "未分组"))), [watchlist]);
+
+  const screenedWatchlist = useMemo(() => {
+    const maxPe = Number(screen.maxPe);
+    const maxPb = Number(screen.maxPb);
+    return watchlist.filter((item) => {
+      if (screen.group !== "全部" && item.group !== screen.group) return false;
+      if (Number.isFinite(maxPe) && item.pe != null && item.pe > maxPe) return false;
+      if (Number.isFinite(maxPb) && item.pb != null && item.pb > maxPb) return false;
+      return true;
+    });
+  }, [watchlist, screen]);
+
+  const archiveCode = selectedArchiveCode || pack?.code || watchlist[0]?.code || "";
+  const archiveReports = useMemo(() => reports.filter((r) => r.code === archiveCode), [reports, archiveCode]);
+  const archiveWatch = watchlist.find((x) => x.code === archiveCode) ?? null;
+  const riskSignals = useMemo(() => riskSignalsFromPack(pack), [pack]);
+  const compareRows = compareCodes.map((c) => watchlist.find((x) => x.code === c)).filter(Boolean) as WatchItem[];
+
+  const addCurrentToWatchlist = () => {
+    if (!pack) return;
+    setWatchlist((prev) => {
+      const existing = prev.find((x) => x.code === pack.code);
+      const nextItem = watchFromPack(pack, existing);
+      return existing ? prev.map((x) => x.code === pack.code ? nextItem : x) : [nextItem, ...prev];
+    });
+    setSelectedArchiveCode(pack.code);
+  };
+
+  const updateWatchItem = (code: string, patch: Partial<WatchItem>) => {
+    setWatchlist((prev) => prev.map((x) => x.code === code ? { ...x, ...patch } : x));
+  };
+
+  const removeWatchItem = (code: string) => {
+    setWatchlist((prev) => prev.filter((x) => x.code !== code));
+  };
+
+  const exportText = useMemo(() => {
+    const rows = watchlist.slice(0, 12).map((x) => `- ${x.name} ${x.code}: ${x.verdict}，PE ${fmt(x.pe)}，PB ${fmt(x.pb)}，${x.note || "暂无备注"}`).join("\n");
+    const ps = principles.filter((p) => p.enabled).map((p) => `- ${p.text}`).join("\n");
+    return [
+      "# 价投合伙人 · 本地投研摘要",
+      "",
+      "## 我的投资原则",
+      ps || "- 暂无",
+      "",
+      "## 自选股池",
+      rows || "- 暂无",
+      "",
+      "## 下一步跟踪",
+      "- 更新自选股数据快照",
+      "- 对重点公司运行 AI 复核",
+      "- 对估值偏高或财务红灯公司做人工复核",
+    ].join("\n");
+  }, [watchlist, principles]);
+
+  const runAiTask = async (kind: string, extra: Record<string, any> = {}) => {
+    setAiBusy(true);
+    setAiResult(null);
+    try {
+      const result = await window.vc.aiTask(kind, {
+        activeView: workspace,
+        currentInput: code,
+        currentPack: pack,
+        currentStats: valStats,
+        watchlist,
+        screenedWatchlist,
+        archiveCode,
+        archiveWatch,
+        archiveReports,
+        riskSignals,
+        compareRows,
+        principles,
+        exportText,
+        ...extra,
+      });
+      setAiResult(result);
+    } catch (e: any) {
+      setAiResult({
+        title: "AI 助手",
+        summary: "AI 助手调用失败。",
+        bullets: [],
+        actions: ["检查设置里的 LLM Key、Base URL 和模型名。"],
+        warnings: [String(e?.message ?? e)],
+      });
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
   const onPickReport = async (r: ReportItem) => {
     setHistoryReviewMsg(null);
+    const reportLabel = stockLabel(r.name, r.code) || r.code || r.file;
     if (r.type === "html") {
       const url = await window.vc.fileUrl(r.path);
-      setViewing({ title: `${r.code} · ${r.date} · HTML 报告`, htmlUrl: url, htmlPath: r.path });
+      setViewing({ title: `${reportLabel} · ${r.date} · HTML 报告`, htmlUrl: url, htmlPath: r.path });
     } else {
       const body = await window.vc.readReport(r.path);
-      setViewing({ title: `${r.code} · ${r.date}`, body });
+      setViewing({ title: `${reportLabel} · ${r.date}`, body });
     }
   };
 
@@ -437,6 +700,26 @@ export default function App() {
       <div className="flex-1 flex min-h-0">
         {/* 历史侧栏 */}
         <aside className="w-56 border-r border-line bg-panel/70 backdrop-blur-xl flex flex-col">
+          <div className="px-3 py-3 border-b border-line">
+            <div className="text-xs text-mute mb-2">投研工作台</div>
+            <div className="grid grid-cols-2 gap-1">
+              {workspaceTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setWorkspace(tab.id)}
+                  title={tab.hint}
+                  className={
+                    "px-2 py-1.5 rounded text-xs text-left border transition-colors " +
+                    (workspace === tab.id
+                      ? "bg-ink text-white border-ink shadow-sm"
+                      : "bg-transparent text-mute border-transparent hover:bg-panel2 hover:text-ink")
+                  }
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="px-3 py-2 text-xs text-mute border-b border-line flex items-center justify-between">
             <span>历史报告</span>
             <button onClick={refreshReports} className="hover:text-gold">刷新</button>
@@ -450,10 +733,10 @@ export default function App() {
                 className="w-full text-left px-3 py-2 hover:bg-panel2 border-b border-line text-sm"
               >
                 <div className="text-ink flex items-center gap-1">
-                  {r.code}
+                  <span className="truncate">{r.name || r.code || r.file}</span>
                   {r.type === "html" && <span className="text-[10px] text-jade border border-jade/40 rounded px-1">HTML</span>}
                 </div>
-                <div className="text-mute text-xs">{r.date}</div>
+                <div className="text-mute text-xs">{r.code ? `${r.code} · ${r.date}` : r.date}</div>
               </button>
             ))}
           </div>
@@ -518,6 +801,14 @@ export default function App() {
             <div className="flex-1" />
             {savedPath && phase === "done" && (
               <>
+                {pack && (
+                  <button
+                    onClick={addCurrentToWatchlist}
+                    className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-1 rounded text-xs font-semibold shadow-sm"
+                  >
+                    {activeWatch ? "更新自选" : "加入自选"}
+                  </button>
+                )}
                 {savedHtmlUrl && (
                   <button
                     onClick={() => setViewing({ title: `${stockLabel(pack?.name, pack?.code) || code} · 最新报告`, htmlUrl: savedHtmlUrl })}
@@ -530,7 +821,7 @@ export default function App() {
                   onClick={onReview}
                   disabled={reviewing}
                   title="让另一个 AI 复核报告里的事实/逻辑/相关性问题"
-                  className="bg-jade/90 hover:bg-jade text-white px-3 py-1 rounded text-xs font-semibold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="bg-ink hover:bg-[#2c2c2e] text-white border border-black/10 px-3 py-1 rounded text-xs font-semibold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {reviewing ? "复核中…" : "AI 复核"}
                 </button>
@@ -556,33 +847,246 @@ export default function App() {
 
           {error && <div className="bg-red/10 border border-red/20 text-red-soft px-3 py-2 rounded text-sm">{error}</div>}
 
-          {/* 数据快照 */}
-          {pack && (
-            <div className="bg-panel rounded-lg border border-line px-4 py-3 shadow-[var(--shadow-soft)] backdrop-blur-xl">
-              <div className="flex items-baseline gap-2 mb-2">
-                <h2 className="text-base font-semibold text-ink">{stockLabel(pack.name, pack.code)}</h2>
-                <span className="text-mute text-xs">财报 {pack.financial_rows} 期 · 拉取 {new Date(pack.fetched_at).toLocaleTimeString("zh-CN")}</span>
+          <AiInsightPanel result={aiResult} busy={aiBusy} onClose={() => { setAiResult(null); setAiBusy(false); }} />
+
+          {workspace === "analysis" ? (
+            <>
+              {pack && (
+                <div className="bg-panel rounded-lg border border-line px-4 py-3 shadow-[var(--shadow-soft)] backdrop-blur-xl">
+                  <div className="flex items-baseline gap-2 mb-2">
+                    <h2 className="text-base font-semibold text-ink">{stockLabel(pack.name, pack.code)}</h2>
+                    <span className="text-mute text-xs">财报 {pack.financial_rows} 期 · 拉取 {new Date(pack.fetched_at).toLocaleTimeString("zh-CN")}</span>
+                    <div className="flex-1" />
+                    <button onClick={() => runAiTask("daily-brief")} disabled={aiBusy} className="bg-ink hover:bg-[#2c2c2e] text-white px-3 py-1 rounded text-xs font-semibold disabled:opacity-50">AI 今日简报</button>
+                    <button onClick={() => runAiTask("report-editor")} disabled={aiBusy} className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-1 rounded text-xs font-semibold disabled:opacity-50">AI 摘要</button>
+                  </div>
+                  <div className="grid grid-cols-6 gap-2">
+                    {valStats.map((s) => <StatTile key={s.label} {...s} />)}
+                  </div>
+                </div>
+              )}
+
+              <div className="relative z-0 flex-1 flex flex-wrap gap-3 min-h-0 overflow-y-auto">
+                {masterCards.map((c) => (
+                  <MasterCard
+                    key={c.id}
+                    title={c.displayName}
+                    subtitle={c.subtitle}
+                    thinking={c.thinking}
+                    answer={c.answer}
+                    active={c.active}
+                    done={c.done}
+                  />
+                ))}
               </div>
-              <div className="grid grid-cols-6 gap-2">
-                {valStats.map((s) => <StatTile key={s.label} {...s} />)}
-              </div>
+            </>
+          ) : (
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {workspace === "watchlist" && (
+                <section className="bg-panel rounded-lg border border-line shadow-[var(--shadow-soft)] backdrop-blur-xl">
+                  <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+                    <div>
+                      <h2 className="text-base font-semibold text-ink">自选股池</h2>
+                      <p className="text-xs text-mute mt-0.5">把单次分析沉淀成长期跟踪对象。</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => runAiTask("watchlist-organize")} disabled={aiBusy || watchlist.length === 0} className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-50">AI 整理</button>
+                      {pack && <button onClick={addCurrentToWatchlist} className="bg-ink text-white hover:bg-[#2c2c2e] px-3 py-1.5 rounded text-xs font-semibold">加入当前公司</button>}
+                    </div>
+                  </div>
+                  <div className="divide-y divide-line">
+                    {watchlist.length === 0 && <div className="px-4 py-8 text-sm text-mute">暂无自选股。先完成一次分析，然后点击“加入自选”。</div>}
+                    {watchlist.map((item) => (
+                      <div key={item.code} className="px-4 py-3 grid grid-cols-[1.2fr_0.8fr_1.2fr_auto] gap-3 items-center hover:bg-panel2/60">
+                        <button onClick={() => { setCode(stockLabel(item.name, item.code)); setSelectedArchiveCode(item.code); setWorkspace("archive"); }} className="text-left">
+                          <div className="text-sm font-semibold text-ink">{item.name} <span className="font-mono text-xs text-gold">{item.code}</span></div>
+                          <div className="text-xs text-mute">更新 {new Date(item.updatedAt).toLocaleString("zh-CN")}</div>
+                        </button>
+                        <select value={item.verdict} onChange={(e) => updateWatchItem(item.code, { verdict: e.target.value })} className="bg-panel2 border border-line rounded px-2 py-1.5 text-xs">
+                          <option>待判断</option>
+                          <option>值得研究</option>
+                          <option>继续观察</option>
+                          <option>暂不研究</option>
+                        </select>
+                        <input value={item.note} onChange={(e) => updateWatchItem(item.code, { note: e.target.value })} placeholder="跟踪备注" className="bg-panel2 border border-line rounded px-2 py-1.5 text-xs" />
+                        <button onClick={() => removeWatchItem(item.code)} className="text-xs text-mute hover:text-red-soft">删除</button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {workspace === "screener" && (
+                <section className="bg-panel rounded-lg border border-line shadow-[var(--shadow-soft)] backdrop-blur-xl">
+                  <div className="px-4 py-3 border-b border-line">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <h2 className="text-base font-semibold text-ink">批量筛选器</h2>
+                        <p className="text-xs text-mute mt-0.5">先基于自选股快照做本地筛选，避免把 AI 用在明显不合适的公司上。</p>
+                      </div>
+                      <button onClick={() => runAiTask("screener-explain")} disabled={aiBusy || screenedWatchlist.length === 0} className="bg-ink hover:bg-[#2c2c2e] text-white px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-50">AI 解释筛选</button>
+                    </div>
+                  </div>
+                  <div className="px-4 py-3 flex items-center gap-3 border-b border-line">
+                    <label className="text-xs text-mute">PE 不高于 <input value={screen.maxPe} onChange={(e) => setScreen({ ...screen, maxPe: e.target.value })} className="ml-1 w-16 bg-panel2 border border-line rounded px-2 py-1 text-ink" /></label>
+                    <label className="text-xs text-mute">PB 不高于 <input value={screen.maxPb} onChange={(e) => setScreen({ ...screen, maxPb: e.target.value })} className="ml-1 w-16 bg-panel2 border border-line rounded px-2 py-1 text-ink" /></label>
+                    <label className="text-xs text-mute">分组
+                      <select value={screen.group} onChange={(e) => setScreen({ ...screen, group: e.target.value })} className="ml-1 bg-panel2 border border-line rounded px-2 py-1 text-ink">
+                        <option>全部</option>
+                        {groups.map((g) => <option key={g}>{g}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2 p-4">
+                    {screenedWatchlist.map((item) => (
+                      <button key={item.code} onClick={() => { setSelectedArchiveCode(item.code); setWorkspace("archive"); }} className="text-left bg-panel2 border border-line rounded-lg px-3 py-3 hover:bg-white">
+                        <div className="text-sm font-semibold">{item.name}</div>
+                        <div className="text-xs text-mute font-mono">{item.code}</div>
+                        <div className="text-xs text-mute mt-2">PE {fmt(item.pe)} · PB {fmt(item.pb)}</div>
+                      </button>
+                    ))}
+                    {screenedWatchlist.length === 0 && <div className="col-span-4 text-sm text-mute">没有符合条件的公司。</div>}
+                  </div>
+                </section>
+              )}
+
+              {workspace === "archive" && (
+                <section className="grid grid-cols-[280px_1fr] gap-3 min-h-full">
+                  <div className="bg-panel rounded-lg border border-line p-3 shadow-[var(--shadow-soft)]">
+                    <div className="text-xs text-mute mb-2">公司档案</div>
+                    <select value={archiveCode} onChange={(e) => setSelectedArchiveCode(e.target.value)} className="w-full bg-panel2 border border-line rounded px-2 py-2 text-sm">
+                      <option value="">选择公司</option>
+                      {watchlist.map((x) => <option key={x.code} value={x.code}>{x.name} {x.code}</option>)}
+                    </select>
+                    {archiveWatch && (
+                      <div className="mt-3 space-y-2 text-sm">
+                        <div className="font-semibold">{archiveWatch.name} <span className="text-xs text-gold font-mono">{archiveWatch.code}</span></div>
+                        <div className="text-xs text-mute">结论：{archiveWatch.verdict}</div>
+                        <div className="text-xs text-mute">PE {fmt(archiveWatch.pe)} · PB {fmt(archiveWatch.pb)}</div>
+                        <textarea value={archiveWatch.note} onChange={(e) => updateWatchItem(archiveWatch.code, { note: e.target.value })} className="w-full h-24 bg-panel2 border border-line rounded px-2 py-2 text-xs" placeholder="跟踪备注" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="bg-panel rounded-lg border border-line shadow-[var(--shadow-soft)]">
+                    <div className="px-4 py-3 border-b border-line flex items-center gap-3">
+                      <div className="flex-1">
+                        <h2 className="text-base font-semibold text-ink">历史报告与跟踪</h2>
+                        <p className="text-xs text-mute mt-0.5">每家公司沉淀报告、复核和备注，形成长期研究主页。</p>
+                      </div>
+                      <button onClick={() => runAiTask("archive-summary")} disabled={aiBusy || !archiveCode} className="bg-ink hover:bg-[#2c2c2e] text-white px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-50">AI 总结档案</button>
+                    </div>
+                    <div className="divide-y divide-line">
+                      {archiveReports.length === 0 && <div className="px-4 py-8 text-sm text-mute">暂无该公司的历史报告。</div>}
+                      {archiveReports.map((r) => (
+                        <button key={r.path} onClick={() => onPickReport(r)} className="w-full px-4 py-3 text-left hover:bg-panel2 flex items-center justify-between">
+                          <span className="text-sm text-ink">{stockLabel(r.name, r.code) || r.code} · {r.date}</span>
+                          <span className="text-xs text-mute">{r.type.toUpperCase()}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {workspace === "risk" && (
+                <section className="bg-panel rounded-lg border border-line shadow-[var(--shadow-soft)]">
+                  <div className="px-4 py-3 border-b border-line">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <h2 className="text-base font-semibold text-ink">风险雷达</h2>
+                        <p className="text-xs text-mute mt-0.5">基于当前数据快照触发红灯，不替代人工核对。</p>
+                      </div>
+                      <button onClick={() => runAiTask("risk-explain")} disabled={aiBusy || !pack} className="bg-ink hover:bg-[#2c2c2e] text-white px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-50">AI 解释风险</button>
+                    </div>
+                  </div>
+                  <div className="p-4 grid grid-cols-3 gap-3">
+                    {riskSignals.map((risk) => (
+                      <div key={risk.title} className={"rounded-lg border px-3 py-3 " + (risk.level === "high" ? "bg-red/10 border-red/20" : risk.level === "mid" ? "bg-amber/10 border-amber/20" : "bg-jade/10 border-jade/20")}>
+                        <div className="text-sm font-semibold text-ink">{risk.title}</div>
+                        <div className="text-xs text-mute mt-1 leading-relaxed">{risk.detail}</div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {workspace === "compare" && (
+                <section className="bg-panel rounded-lg border border-line shadow-[var(--shadow-soft)]">
+                  <div className="px-4 py-3 border-b border-line">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <h2 className="text-base font-semibold text-ink">公司对比</h2>
+                        <p className="text-xs text-mute mt-0.5">选择两家公司，快速比较估值、结论和备注。</p>
+                      </div>
+                      <button onClick={() => runAiTask("compare-explain")} disabled={aiBusy || compareRows.length < 2} className="bg-ink hover:bg-[#2c2c2e] text-white px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-50">AI 对比结论</button>
+                    </div>
+                  </div>
+                  <div className="p-4 flex gap-3">
+                    {[0, 1].map((idx) => (
+                      <select key={idx} value={compareCodes[idx]} onChange={(e) => setCompareCodes(idx === 0 ? [e.target.value, compareCodes[1]] : [compareCodes[0], e.target.value])} className="bg-panel2 border border-line rounded px-3 py-2 text-sm">
+                        <option value="">选择公司</option>
+                        {watchlist.map((x) => <option key={x.code} value={x.code}>{x.name} {x.code}</option>)}
+                      </select>
+                    ))}
+                  </div>
+                  <div className="px-4 pb-4 grid grid-cols-2 gap-3">
+                    {compareRows.map((item) => (
+                      <div key={item.code} className="bg-panel2 border border-line rounded-lg p-4">
+                        <div className="text-base font-semibold">{item.name} <span className="text-xs text-gold font-mono">{item.code}</span></div>
+                        <div className="grid grid-cols-3 gap-2 mt-3">
+                          <StatTile label="PE" value={fmt(item.pe)} />
+                          <StatTile label="PB" value={fmt(item.pb)} />
+                          <StatTile label="市值" value={fmtBig(item.marketCap)} />
+                        </div>
+                        <div className="mt-3 text-xs text-mute">结论：{item.verdict}</div>
+                        <div className="mt-1 text-xs text-mute">备注：{item.note || "暂无"}</div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {workspace === "principles" && (
+                <section className="bg-panel rounded-lg border border-line shadow-[var(--shadow-soft)]">
+                  <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+                    <div>
+                      <h2 className="text-base font-semibold text-ink">我的投资原则</h2>
+                      <p className="text-xs text-mute mt-0.5">把个人能力圈和排除项固定下来，减少临场摇摆。</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => runAiTask("principles-coach")} disabled={aiBusy || principles.length === 0} className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-50">AI 转规则</button>
+                      <button onClick={() => setPrinciples((prev) => [...prev, { id: String(Date.now()), text: "", enabled: true }])} className="bg-ink text-white hover:bg-[#2c2c2e] px-3 py-1.5 rounded text-xs font-semibold">新增原则</button>
+                    </div>
+                  </div>
+                  <div className="divide-y divide-line">
+                    {principles.map((p) => (
+                      <div key={p.id} className="px-4 py-3 flex items-center gap-3">
+                        <input type="checkbox" checked={p.enabled} onChange={(e) => setPrinciples((prev) => prev.map((x) => x.id === p.id ? { ...x, enabled: e.target.checked } : x))} />
+                        <input value={p.text} onChange={(e) => setPrinciples((prev) => prev.map((x) => x.id === p.id ? { ...x, text: e.target.value } : x))} className="flex-1 bg-panel2 border border-line rounded px-3 py-2 text-sm" />
+                        <button onClick={() => setPrinciples((prev) => prev.filter((x) => x.id !== p.id))} className="text-xs text-mute hover:text-red-soft">删除</button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {workspace === "export" && (
+                <section className="bg-panel rounded-lg border border-line shadow-[var(--shadow-soft)] h-full flex flex-col">
+                  <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+                    <div>
+                      <h2 className="text-base font-semibold text-ink">导出与分享</h2>
+                      <p className="text-xs text-mute mt-0.5">生成一份可复制到 Obsidian、Notion、微信草稿的摘要。</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => runAiTask("report-editor")} disabled={aiBusy} className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-50">AI 润色摘要</button>
+                      <button onClick={() => navigator.clipboard.writeText(exportText)} className="bg-ink text-white hover:bg-[#2c2c2e] px-3 py-1.5 rounded text-xs font-semibold">复制摘要</button>
+                    </div>
+                  </div>
+                  <textarea readOnly value={exportText} className="flex-1 m-4 bg-panel2 border border-line rounded-lg p-3 text-sm font-mono leading-relaxed resize-none" />
+                </section>
+              )}
             </div>
           )}
-
-          {/* v0.2.0：多大师卡片 — 动态 grid，2-4 列自适应 */}
-          <div className="relative z-0 flex-1 flex flex-wrap gap-3 min-h-0 overflow-y-auto">
-            {masterCards.map((c) => (
-              <MasterCard
-                key={c.id}
-                title={c.displayName}
-                subtitle={c.subtitle}
-                thinking={c.thinking}
-                answer={c.answer}
-                active={c.active}
-                done={c.done}
-              />
-            ))}
-          </div>
 
           {/* 历史预览 */}
           {viewing && (
@@ -596,7 +1100,7 @@ export default function App() {
                         onClick={onHistoryReview}
                         disabled={historyReviewing}
                         title="对当前报告做 AI 复核（旧报告自动走降级模式）"
-                        className="bg-jade/90 hover:bg-jade text-white px-3 py-1 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="bg-ink hover:bg-[#2c2c2e] text-white border border-black/10 px-3 py-1 rounded text-xs font-semibold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {historyReviewing ? "复核中…" : "AI 复核"}
                       </button>

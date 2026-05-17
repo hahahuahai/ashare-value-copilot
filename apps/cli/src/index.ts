@@ -26,6 +26,16 @@ function loadEnvSync() {
 }
 loadEnvSync();
 
+function safeFilePart(value: string): string {
+  return String(value ?? "")
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .replace(/\s+/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+}
+
 // === Phase 2: 现在才允许 import 业务模块 ===
 const { buildDataPack, data } = await import("@vc/data");
 const { runMaster } = await import("@vc/agents");
@@ -91,7 +101,9 @@ async function cmdAsk(code: string) {
   // 2. 拉数据
   console.log(kleur.cyan("🔍 拉取数据..."), code);
   const pack = await buildDataPack(code);
-  const name = (pack.quote as any)?.name ?? (pack.profile as any)?.["股票简称"] ?? "";
+  const directName = (pack.quote as any)?.name ?? (pack.profile as any)?.["股票简称"] ?? "";
+  const name = directName || (await data.searchStocks(code).catch(() => null))?.rows?.find((r: any) => r.code === code)?.name || "";
+  (pack as any).name = name;
   const displayName = name ? `${name} ${code}` : code;
 
   // 3. v0.2.0：循环跑所有默认启用的大师
@@ -128,7 +140,9 @@ async function cmdAsk(code: string) {
     `---`,
     `⚠️ 本报告仅用于研究辅助，不构成任何买卖建议。`,
   ].join("\n");
-  const path = resolve(dir, `${code}-${date}.md`);
+  const safeName = safeFilePart(name);
+  const fileBase = safeName ? `${safeName}-${code}-${date}` : `${code}-${date}`;
+  const path = resolve(dir, `${fileBase}.md`);
   await writeFile(path, md, "utf-8");
   console.log("\n" + kleur.green("✓ 报告已保存"), kleur.dim(path));
 }

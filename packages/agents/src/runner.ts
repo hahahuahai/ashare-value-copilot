@@ -31,6 +31,7 @@ function buildMessages(_master: Master, data: DataPack, system: string) {
   const userMsg = [
     `# 待分析对象`,
     `股票代码：${data.code}`,
+    `股票名称：${(data as any).name ?? ""}`,
     `数据获取时间：${data.fetched_at}`,
     `数据来源：${data.sources.join(", ")}`,
     "",
@@ -117,6 +118,7 @@ export async function runJudge(args: {
   const userMsg = [
     `# 待汇总对象`,
     `股票代码：${args.data.code}`,
+    `股票名称：${(args.data as any).name ?? ""}`,
     `数据获取时间：${args.data.fetched_at}`,
     `本次启用大师：${args.analyses.map((a) => `${a.displayName}(${a.id})`).join("、")}`,
     "",
@@ -380,8 +382,48 @@ export function extractJudgeJSON(raw: string): any {
   let text = m ? m[1] : raw;
 
   const tryParse = (s: string) => { try { return JSON.parse(s); } catch { return null; } };
+  const escapeBareQuotesInStrings = (s: string) => {
+    let out = "";
+    let inStr = false;
+    let escaped = false;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (!inStr) {
+        out += ch;
+        if (ch === '"') inStr = true;
+        continue;
+      }
+
+      if (escaped) {
+        out += ch;
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        out += ch;
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        let j = i + 1;
+        while (j < s.length && /\s/.test(s[j])) j++;
+        const next = s[j];
+        if (next === ":" || next === "," || next === "}" || next === "]" || next == null) {
+          out += ch;
+          inStr = false;
+        } else {
+          out += '\\"';
+        }
+        continue;
+      }
+      out += ch;
+    }
+    return out;
+  };
 
   let r = tryParse(text);
+  if (r) return r;
+  r = tryParse(escapeBareQuotesInStrings(text));
   if (r) return r;
 
   // 没闭合的 ```json 块：取第一个 { 到最后字符
@@ -390,6 +432,8 @@ export function extractJudgeJSON(raw: string): any {
     const b = text.lastIndexOf("}");
     if (a >= 0 && b > a) {
       r = tryParse(text.slice(a, b + 1));
+      if (r) return r;
+      r = tryParse(escapeBareQuotesInStrings(text.slice(a, b + 1)));
       if (r) return r;
     }
   }
@@ -433,6 +477,8 @@ export function extractJudgeJSON(raw: string): any {
   while (openArr-- > 0) closed += "]";
   while (openObj-- > 0) closed += "}";
   r = tryParse(closed);
+  if (r) return r;
+  r = tryParse(escapeBareQuotesInStrings(closed));
   if (r) return r;
 
   throw new Error("Judge JSON parse failed");

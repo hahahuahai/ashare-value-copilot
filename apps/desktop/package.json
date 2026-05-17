@@ -11,7 +11,7 @@
     "dist": "node ../../scripts/build-sidecar.mjs && electron-vite build && electron-builder",
     "dist:portable": "node ../../scripts/build-sidecar.mjs && electron-vite build && electron-builder --win portable",
     "dist:nsis": "node ../../scripts/build-sidecar.mjs && electron-vite build && electron-builder --win nsis",
-    "dist:mac": "node ../../scripts/prepare-mac-icon.mjs && node ../../scripts/build-sidecar.mjs && electron-vite build && electron-builder --mac dmg zip"
+    "dist:mac": "node ../../scripts/prepare-mac-icon.mjs && node ../../scripts/build-sidecar.mjs && electron-vite build && electron-builder --mac pkg dmg zip"
   },
   "build": {
     "appId": "com.huahai.ashare-value-copilot",
@@ -55,12 +55,21 @@
       "icon": "resources/icon.icns",
       "category": "public.app-category.finance",
       "target": [
+        { "target": "pkg", "arch": ["arm64"] },
         { "target": "dmg", "arch": ["arm64"] },
         { "target": "zip", "arch": ["arm64"] }
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "hardenedRuntime": false,
       "gatekeeperAssess": false
+    },
+    "pkg": {
+      "installLocation": "/Applications",
+      "allowAnywhere": false,
+      "allowCurrentUserHome": false,
+      "allowRootDirectory": true,
+      "isRelocatable": false,
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "dmg": {
       "artifactName": "${productName}-${version}-${arch}.${ext}"

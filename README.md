@@ -49,18 +49,60 @@ flowchart LR
 - 🔒 **能力圈门禁**：看不懂的生意直接拒绝分析，不装懂
 - 📐 **反幻觉**：所有数字必须来自 tool call（akshare 实时查询），禁止 LLM 自算
 - 🧪 **AI 复核员**：每份报告由独立的复核 Agent 对照原文扫引用、扫矛盾、扫估值跳跃，产出 issues 清单
-- 🖥️ **桌面端**：Electron 打包，Windows NSIS / Portable 与 macOS DMG / ZIP 发行，内置数据边车，下载即可用
+- 🖥️ **桌面投研工作台**：Electron 打包，Windows NSIS / Portable 与 macOS PKG / DMG / ZIP 发行，内置数据边车，下载即可用
+- 🗂️ **自选股池 + 公司档案**：把单次报告沉淀成长期跟踪对象，维护结论、备注和历史报告
+- 🔎 **本地筛选 / 风险雷达 / 公司对比**：基于本地快照筛候选、看风险红灯、横向比较估值和备注
 - 🔑 **自带 API Key · 12 家 LLM Provider 即选即用**：OpenAI 兼容协议，桌面端内置预设：腾讯云 LKEAP / DeepSeek / 阿里通义 / 智谱 GLM / Kimi / 豆包 / 硅基流动 / OpenRouter / Ollama / OpenAI / Grok / 自定义。思考型模型（如 glm-4.6 / qwq）的 reasoning 链很费 token，v0.1.15 起默认预算已拉到 16384 并内置截断重试
 
 ---
+
+## 桌面工作台功能
+
+桌面端不只是“生成一份报告”，而是围绕长期研究流程做了一个本地投研台：
+
+| 模块 | 能做什么 |
+|---|---|
+| **分析** | 输入股票代码或公司名，拉取 DataPack，运行多位大师 Agent，生成 HTML / Markdown 报告 |
+| **AI 复核** | 对已生成 HTML 报告做事实、逻辑、相关性复核，并把复核卡片写回报告 |
+| **自选股池** | 将当前分析公司加入自选，维护“值得研究 / 继续观察 / 暂不研究”等结论和备注 |
+| **批量筛选器** | 基于自选股快照按 PE、PB、分组筛候选，先排除明显不合适的公司 |
+| **公司档案** | 按公司聚合历史报告、结论、备注，形成长期研究主页 |
+| **风险雷达** | 根据当前数据快照提示估值偏高、杠杆较高、ROE 偏弱、数据不足等风险 |
+| **公司对比** | 选择两家公司横向比较 PE、PB、市值、结论和备注 |
+| **我的投资原则** | 在本地维护个人能力圈、排除项和检查清单 |
+| **导出与分享** | 生成 Markdown 投研摘要，可复制到 Obsidian / Notion / 微信草稿 |
+
+推荐使用路径：
+
+```text
+单家公司分析 → AI 复核 → 加入自选 → 本地筛选 → 公司档案跟踪 → 对比 / 风险复盘 → 导出摘要
+```
+
+### AI 助手层
+
+工作台内置统一的 AI Copilot Layer。每个模块都有一个轻量 AI 动作按钮，用户不需要自己写 prompt：
+
+| AI 动作 | 使用场景 |
+|---|---|
+| **AI 今日简报** | 根据当前数据、自选股、原则和历史报告生成下一步研究提醒 |
+| **AI 整理自选** | 帮自选股分组、总结跟踪理由、提示应该先看哪几家公司 |
+| **AI 解释筛选** | 解释筛选条件含义、为什么这些公司留下、哪些公司暂时排除 |
+| **AI 解释风险** | 把风险雷达的红灯翻译成可执行核查清单 |
+| **AI 总结档案** | 总结某家公司历史判断变化、长期观点和下次研究问题 |
+| **AI 对比结论** | 对两家公司给出差异摘要，说明谁更接近你的投资原则 |
+| **AI 转规则** | 把自然语言投资原则转成可执行筛选/排除条件 |
+| **AI 摘要 / 润色** | 把报告或导出内容整理成更适合分享和复盘的版本 |
+
+所有 AI 动作都遵守同一约束：只基于当前页面上下文、DataPack、报告和用户原则整理，不新增未来源数字，不输出买卖建议。
 
 ## 两种用法
 
 ### A. 桌面端（推荐 · 给"只想点按钮的你"）
 
-1. 去 [Releases](https://github.com/hahahuahai/ashare-value-copilot/releases) 下载 `价投合伙人-0.2.2-x64.exe`（Windows 安装版）、`价投合伙人-0.2.2-portable.exe`（Windows 免安装版），或 macOS 的 `.dmg / .zip` 包
+1. 去 [Releases](https://github.com/hahahuahai/ashare-value-copilot/releases) 下载 `价投合伙人-0.2.2-x64.exe`（Windows 安装版）、`价投合伙人-0.2.2-portable.exe`（Windows 免安装版），或 macOS 的 `.pkg / .dmg / .zip` 包
 2. 首次启动填 `LLM_BASE_URL / API_KEY / MODEL`（支持 LKEAP / DeepSeek / 本地 Ollama）
-3. 输入股票代码，点「跑」→ 得到三段式 HTML 报告 + AI 复核结论
+3. 输入股票代码或公司名，点「开始分析」→ 得到三段式 HTML 报告
+4. 点击「AI 复核」检查报告，再把公司加入「自选」进入长期跟踪
 
 桌面端会优先启动安装包内置的 `value-copilot-sidecar`，普通用户不需要安装 Python。开发者仍可用源码模式运行 `pnpm sidecar`。
 
@@ -72,7 +114,7 @@ pnpm install
 pnpm desktop:dist:mac
 ```
 
-当前 macOS 配置默认生成 Apple Silicon (`arm64`) 的 DMG / ZIP，并会在 Mac 上用系统 `sips` / `iconutil` 从现有 PNG 生成 `resources/icon.icns`。正式分发前建议配置 Apple Developer ID 签名与 notarization；本地测试包可能需要在系统设置中允许打开。
+当前 macOS 配置默认生成 Apple Silicon (`arm64`) 的 PKG / DMG / ZIP。PKG 会把应用安装到 `/Applications`；安装包内已包含 Electron 应用和 PyInstaller 打出的 `value-copilot-sidecar`，普通用户不需要安装 Node、pnpm、Python 或 akshare。构建命令会在 Mac 上用系统 `sips` / `iconutil` 从现有 PNG 生成 `resources/icon.icns`。正式分发前建议配置 Apple Developer ID 签名与 notarization；未签名本地测试包可能需要在系统设置中允许打开。
 
 ### 30 秒理解 Quick Start
 
@@ -261,8 +303,9 @@ DeepSeek 官方          deepseek-chat               ✓ PASS   780ms   → ping
 - [x] **W3** 批量跑样例（茅台 600519 / 平安 601318 / 工行 601138 已验证）
 - [x] **W4** reviewer 结果落 `meta.json`，payload 附 `llm_meta`（finish_reason / truncated / 预算使用）
 - [x] **W6** 公开发布（v0.1.15 · 2026-05-10）
+- [x] **W7** 桌面投研工作台：自选股池、批量筛选器、公司档案、风险雷达、公司对比、投资原则、导出摘要
 - [ ] **W3** 芒格 Agent + 三方圆桌辩论
-- [ ] **W4** 能力圈档案（SQLite）+ 持仓周报 + 企微推送
+- [ ] **W8** 自选股批量后台更新 + SQLite 持久化 + 持仓周报
 - [ ] **W5** Web UI（React Flow 可视化合议链路）
 - [ ] **W6** 公众号推介 + 样例报告集
 

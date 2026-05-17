@@ -7,6 +7,7 @@ services/data-sidecar/.venv-build/
 services/data-sidecar/build/
 services/data-sidecar/*.spec
 apps/desktop/out/
+apps/desktop/dist*/
 .env
 reports/
 __pycache__/

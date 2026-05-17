@@ -18,7 +18,7 @@
     "desktop:dist": "pnpm sidecar:build && pnpm --filter @vc/desktop build && cd apps/desktop && npx electron-builder",
     "desktop:portable": "pnpm sidecar:build && pnpm --filter @vc/desktop build && cd apps/desktop && npx electron-builder --win portable",
     "desktop:nsis": "pnpm sidecar:build && pnpm --filter @vc/desktop build && cd apps/desktop && npx electron-builder --win nsis",
-    "desktop:dist:mac": "pnpm desktop:prepare:mac && pnpm sidecar:build && pnpm --filter @vc/desktop build && cd apps/desktop && npx electron-builder --mac dmg zip",
+    "desktop:dist:mac": "pnpm desktop:prepare:mac && pnpm sidecar:build && pnpm --filter @vc/desktop build && cd apps/desktop && npx electron-builder --mac pkg dmg zip",
     "verify:providers": "node scripts/verify-providers.mjs"
   },
   "workspaces": [
