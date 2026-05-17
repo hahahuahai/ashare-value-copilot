@@ -113,6 +113,9 @@ def get_stock_search(q: str) -> dict:
     if not query:
         return {"query": query, "rows": [], "row_count": 0}
 
+    def _compact_name(value: str) -> str:
+        return "".join(str(value or "").split())
+
     today = datetime.date.today().isoformat()
     rows = _STOCK_LIST_CACHE.get("rows")
     if _STOCK_LIST_CACHE.get("date") != today or rows is None:
@@ -128,7 +131,7 @@ def get_stock_search(q: str) -> dict:
                 if df is not None and not df.empty:
                     for _, r in df.iterrows():
                         code = str(r.get("code") or r.get("证券代码") or "").strip()
-                        name = str(r.get("name") or r.get("证券简称") or "").strip()
+                        name = _compact_name(str(r.get("name") or r.get("证券简称") or "").strip())
                         if len(code) == 6 and code.isdigit() and name:
                             rows.append({"code": code, "name": name})
                 _STOCK_LIST_CACHE["date"] = today
@@ -137,12 +140,14 @@ def get_stock_search(q: str) -> dict:
             except Exception as e:
                 return {"query": query, "rows": [], "row_count": 0, "error": str(e)}
 
-    q_lower = query.lower()
+    q_lower = _compact_name(query).lower()
     is_digits = query.isdigit()
     matches = []
     for item in rows:
         code = item["code"]
-        name = item["name"]
+        name = str(item["name"] or "").strip()
+        display_name = _compact_name(name)
+        name_lower = display_name.lower()
         score = None
         reason = ""
         if is_digits:
@@ -153,16 +158,15 @@ def get_stock_search(q: str) -> dict:
             elif query in code:
                 score, reason = 60, "code_contains"
         else:
-            name_lower = name.lower()
-            if name == query:
+            if name_lower == q_lower:
                 score, reason = 100, "name_exact"
-            elif name.startswith(query):
+            elif name_lower.startswith(q_lower):
                 score, reason = 85, "name_prefix"
             elif q_lower in name_lower:
                 score, reason = 70, "name_contains"
 
         if score is not None:
-            matches.append({**item, "score": score, "reason": reason})
+            matches.append({**item, "name": display_name or name, "score": score, "reason": reason})
 
     matches.sort(key=lambda x: (-x["score"], x["code"]))
     limited = matches[:20]
