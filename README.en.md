@@ -6,7 +6,31 @@
 >
 > **ai-hedge-fund teaches you to build a hedge fund. A-Share Value Copilot tries to help you trade less.**
 
-[![Latest Release](https://img.shields.io/github/v/release/hahahuahai/ashare-value-copilot?label=latest%20release&color=orange)](https://github.com/hahahuahai/ashare-value-copilot/releases/latest) [![Release Date](https://img.shields.io/github/release-date/hahahuahai/ashare-value-copilot?color=blue)](https://github.com/hahahuahai/ashare-value-copilot/releases/latest) [![Downloads](https://img.shields.io/github/downloads/hahahuahai/ashare-value-copilot/total?color=brightgreen)](https://github.com/hahahuahai/ashare-value-copilot/releases) ![status](https://img.shields.io/badge/status-public--beta-brightgreen) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+[![CI](https://github.com/hahahuahai/ashare-value-copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/hahahuahai/ashare-value-copilot/actions/workflows/ci.yml) [![Latest Release](https://img.shields.io/github/v/release/hahahuahai/ashare-value-copilot?label=latest%20release&color=orange)](https://github.com/hahahuahai/ashare-value-copilot/releases/latest) [![Release Date](https://img.shields.io/github/release-date/hahahuahai/ashare-value-copilot?color=blue)](https://github.com/hahahuahai/ashare-value-copilot/releases/latest) [![Downloads](https://img.shields.io/github/downloads/hahahuahai/ashare-value-copilot/total?color=brightgreen)](https://github.com/hahahuahai/ashare-value-copilot/releases) ![status](https://img.shields.io/badge/status-public--beta-brightgreen) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey)
+
+**Positioning: a local AI research desk for China A-share investors and builders.**
+
+No paid market-data API, no model-invented numbers, and no buy/sell calls. The app helps you decide whether a company deserves deeper research, with evidence, disagreements, and unknowns shown explicitly.
+
+## See The Output
+
+| Stock | Sample | Verdict | One-liner |
+|---|---|---|---|
+| Ping An `601318` | [HTML](./reports/601318-e2e-2026-05-10.html) · [meta](./reports/601318-e2e-2026-05-10.meta.json) | `worth_research` | PE 8.19 at the 21st percentile; strong financial ecosystem, but investment book needs scrutiny. |
+| FII `601138` | [HTML](./reports/601138-e2e-2026-05-10.html) · [meta](./reports/601138-e2e-2026-05-10.meta.json) | `pass` | PE 30.89 at the 92nd percentile; contract manufacturing leader with thin margins. |
+| Kweichow Moutai `600519` | [Markdown](./reports/600519-2026-05-10.md) | sample | Early CLI Markdown report sample. |
+
+More examples are collected in the [sample report gallery](./docs/sample-reports.md).
+
+```mermaid
+flowchart LR
+  A["Stock code / company name"] --> B["Python data sidecar<br/>akshare"]
+  B --> C["DataPack<br/>single numeric source"]
+  C --> D["Value-investing agents"]
+  D --> E["Judge<br/>verdict + scorecard"]
+  E --> F["HTML / Markdown report"]
+  F --> G["AI reviewer<br/>fact, logic, relevance checks"]
+```
 
 ---
 
@@ -25,7 +49,7 @@ This project takes the opposite route:
 - **Circle-of-competence gatekeeping**: if the business is not understandable, the agent is allowed to refuse analysis.
 - **Anti-hallucination by design**: all numbers must come from fetched data, not model arithmetic.
 - **AI reviewer**: a separate reviewer agent checks citations, contradictions, and valuation leaps.
-- **Desktop app**: Electron app with Windows NSIS installer and portable build.
+- **Desktop app**: Electron app with Windows NSIS / portable and macOS DMG / ZIP builds, plus a bundled data sidecar.
 - **Bring your own API key**: OpenAI-compatible providers including Tencent Cloud LKEAP, DeepSeek, DashScope, Zhipu GLM, Kimi, Doubao, SiliconFlow, OpenRouter, Ollama, OpenAI, Grok, and custom endpoints.
 
 ---
@@ -34,12 +58,32 @@ This project takes the opposite route:
 
 ### A. Desktop App, Recommended
 
-1. Download `value-copilot-0.2.1-setup-x64.exe` or `value-copilot-0.2.1-portable.exe` from [Releases](https://github.com/hahahuahai/ashare-value-copilot/releases).
-2. Install Python 3.10+ locally. The desktop app starts the Python data sidecar automatically, but it still needs a Python interpreter.
-3. On first launch, fill in `LLM_BASE_URL`, `API_KEY`, and `MODEL`.
-4. Enter a stock code or company name, for example `600519`, `贵州茅台`, or `中国平安`, then run the analysis.
+1. Download `价投合伙人-0.2.2-x64.exe`, `价投合伙人-0.2.2-portable.exe`, or the macOS `.dmg / .zip` package from [Releases](https://github.com/hahahuahai/ashare-value-copilot/releases).
+2. On first launch, fill in `LLM_BASE_URL`, `API_KEY`, and `MODEL`.
+3. Enter a stock code or company name, for example `600519`, `贵州茅台`, or `中国平安`, then run the analysis.
 
-The desktop package includes prompts and sidecar source code. Python itself is not bundled.
+The desktop package starts a bundled `value-copilot-sidecar`, so normal users do not need to install Python. Developers can still run the source sidecar with `pnpm sidecar`.
+
+### Build macOS Packages Locally
+
+```bash
+corepack enable
+pnpm install
+pnpm desktop:dist:mac
+```
+
+The current macOS target produces Apple Silicon (`arm64`) DMG / ZIP artifacts. For public distribution, configure Apple Developer ID signing and notarization; unsigned local test builds may need to be allowed from macOS System Settings.
+On macOS, the build command also generates `resources/icon.icns` from the existing PNG with the system `sips` / `iconutil` tools.
+
+### 30-second Quick Start
+
+```bash
+pnpm install
+pnpm sidecar
+cp .env.example .env
+# Fill LLM_BASE_URL / LLM_API_KEY / LLM_MODEL
+pnpm ask 600519
+```
 
 ### B. CLI, For Developers
 
@@ -62,6 +106,21 @@ pnpm ask 中国平安           # Ping An Insurance
 Reports are written to `reports/{code}-{date}.md / .html`. Reviewer metadata is written next to the report when available.
 
 See [RUN.md](./RUN.md) for troubleshooting.
+
+---
+
+## Trust Engineering
+
+The goal is not to make the LLM sound smarter. The goal is to constrain it so the report stays auditable:
+
+| Mechanism | What it does |
+|---|---|
+| Single `DataPack` truth source | Valuation, financials, dividends, quotes, and industry data are fetched before the model sees them. |
+| No invented numbers | Prompts require the model to quote only numbers present in the JSON payload. Missing data must be called out. |
+| Agent disagreement | Business, company, and price verdicts remain visible instead of being collapsed into one opaque score. |
+| Judge cannot add evidence | The judge aggregates agent text and `DataPack`; it does not introduce new facts. |
+| Independent reviewer | A separate reviewer checks citations, contradictions, valuation leaps, and relevance. |
+| Traceable artifacts | HTML, Markdown, judge raw output, payload, and metadata files are saved together for debugging. |
 
 ---
 

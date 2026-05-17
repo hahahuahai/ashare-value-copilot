@@ -315,16 +315,16 @@ export function SettingsModal({ open, onClose, onSaved, forcedSetup }: Props) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black/25 backdrop-blur-sm flex items-center justify-center z-50"
       onClick={() => { if (!forcedSetup) onClose(); }}
     >
       <div
-        className="bg-panel rounded-lg border border-line w-[580px] max-w-[92%] flex flex-col shadow-2xl max-h-[90vh]"
+        className="bg-panel rounded-lg border border-line w-[580px] max-w-[92%] flex flex-col shadow-[var(--shadow-soft)] backdrop-blur-xl max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b border-line flex items-center justify-between shrink-0">
           <div>
-            <h3 className="text-gold font-semibold text-base flex items-center gap-2">
+            <h3 className="text-ink font-semibold text-base flex items-center gap-2">
               ⚙️ 设置
               {forcedSetup && <span className="text-amber text-xs font-normal">首次运行 · 请先配置</span>}
             </h3>
@@ -361,7 +361,7 @@ export function SettingsModal({ open, onClose, onSaved, forcedSetup }: Props) {
                   key={p.id}
                   className={`flex items-center gap-2 px-3 py-2 rounded border cursor-pointer transition-colors ${
                     provider === p.id
-                      ? "border-gold bg-gold/5"
+                      ? "border-gold bg-gold/10 shadow-[var(--shadow-hairline)]"
                       : "border-line hover:border-mute bg-panel2"
                   }`}
                 >
@@ -450,7 +450,7 @@ export function SettingsModal({ open, onClose, onSaved, forcedSetup }: Props) {
                     key={m.value}
                     className={`flex items-center gap-3 px-3 py-2 rounded border cursor-pointer transition-colors ${
                       model === m.value
-                        ? "border-gold bg-gold/5"
+                        ? "border-gold bg-gold/10 shadow-[var(--shadow-hairline)]"
                         : "border-line hover:border-mute bg-panel2"
                     }`}
                   >
@@ -534,7 +534,7 @@ export function SettingsModal({ open, onClose, onSaved, forcedSetup }: Props) {
                     <label
                       key={m.id}
                       className={`flex items-center gap-3 px-4 py-3 rounded border cursor-pointer transition-colors ${
-                        checked ? "border-gold bg-gold/5" : "border-line hover:border-mute bg-panel2"
+                        checked ? "border-gold bg-gold/10 shadow-[var(--shadow-hairline)]" : "border-line hover:border-mute bg-panel2"
                       }`}
                     >
                       <input
@@ -570,7 +570,7 @@ export function SettingsModal({ open, onClose, onSaved, forcedSetup }: Props) {
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-line flex items-center justify-between bg-panel2/50 rounded-b-lg shrink-0">
+        <div className="px-5 py-3 border-t border-line flex items-center justify-between bg-panel2/70 rounded-b-lg shrink-0">
           <div className="text-xs text-mute">
             {savedTick ? (
               <span className="text-jade">✓ 已保存，立即生效</span>
@@ -582,7 +582,7 @@ export function SettingsModal({ open, onClose, onSaved, forcedSetup }: Props) {
             {!forcedSetup && (
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-sm text-mute hover:text-ink border border-line rounded"
+                className="px-4 py-2 text-sm text-mute hover:text-ink border border-line bg-panel2 rounded"
               >
                 取消
               </button>
@@ -590,7 +590,7 @@ export function SettingsModal({ open, onClose, onSaved, forcedSetup }: Props) {
             <button
               onClick={onSave}
               disabled={!canSave}
-              className="px-4 py-2 text-sm bg-red hover:bg-red-soft text-white rounded font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm bg-red hover:bg-red-soft text-white rounded font-semibold shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {saving ? "保存中..." : "保存并应用"}
             </button>

@@ -6,7 +6,31 @@
 >
 > **ai-hedge-fund 教你做对冲基金，价投合伙人教你少做交易。**
 
-[![Latest Release](https://img.shields.io/github/v/release/hahahuahai/ashare-value-copilot?label=latest%20release&color=orange)](https://github.com/hahahuahai/ashare-value-copilot/releases/latest) [![Release Date](https://img.shields.io/github/release-date/hahahuahai/ashare-value-copilot?color=blue)](https://github.com/hahahuahai/ashare-value-copilot/releases/latest) [![Downloads](https://img.shields.io/github/downloads/hahahuahai/ashare-value-copilot/total?color=brightgreen)](https://github.com/hahahuahai/ashare-value-copilot/releases) ![status](https://img.shields.io/badge/status-public--beta-brightgreen) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+[![CI](https://github.com/hahahuahai/ashare-value-copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/hahahuahai/ashare-value-copilot/actions/workflows/ci.yml) [![Latest Release](https://img.shields.io/github/v/release/hahahuahai/ashare-value-copilot?label=latest%20release&color=orange)](https://github.com/hahahuahai/ashare-value-copilot/releases/latest) [![Release Date](https://img.shields.io/github/release-date/hahahuahai/ashare-value-copilot?color=blue)](https://github.com/hahahuahai/ashare-value-copilot/releases/latest) [![Downloads](https://img.shields.io/github/downloads/hahahuahai/ashare-value-copilot/total?color=brightgreen)](https://github.com/hahahuahai/ashare-value-copilot/releases) ![status](https://img.shields.io/badge/status-public--beta-brightgreen) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey)
+
+**一句话定位：A 股散户和研究者的本地 AI 投研台。**
+
+不用付费行情 API，不让模型编数字，不给买卖建议；它只帮你判断一家公司是否值得继续研究，并把证据、分歧和不知道的部分摊开。
+
+## 先看产物
+
+| 股票 | 样例 | 裁判结论 | 一句话 |
+|---|---|---|---|
+| 中国平安 `601318` | [HTML](./reports/601318-e2e-2026-05-10.html) · [meta](./reports/601318-e2e-2026-05-10.meta.json) | `worth_research` | PE 8.19 处 21% 分位，金融生态稳但投资端待考 |
+| 工业富联 `601138` | [HTML](./reports/601138-e2e-2026-05-10.html) · [meta](./reports/601138-e2e-2026-05-10.meta.json) | `pass` | PE 30.89 处 92% 分位，代工龙头毛利率仅 7% |
+| 贵州茅台 `600519` | [Markdown](./reports/600519-2026-05-10.md) | sample | CLI 早期报告样例 |
+
+更多真实输出见 [样例报告库](./docs/sample-reports.md)。
+
+```mermaid
+flowchart LR
+  A["股票代码 / 公司名"] --> B["Python 数据边车<br/>akshare"]
+  B --> C["DataPack<br/>唯一数字来源"]
+  C --> D["多位价值投资大师"]
+  D --> E["综合裁判<br/>verdict + scorecard"]
+  E --> F["HTML / Markdown 报告"]
+  F --> G["AI 复核员<br/>事实、逻辑、相关性问题"]
+```
 
 ---
 
@@ -21,11 +45,11 @@
 价投合伙人反着来：
 
 - 🇨🇳 **A 股原生**：akshare 免费数据，不依赖任何付费 API
-- 🧠 **中文大师人格**：巴菲特 + 段永平双人委员会，强制 `PASS / FAIL / GRAY` 三段式输出
+- 🧠 **中文大师人格**：巴菲特 / 段永平 / 芒格 / 林奇 / 马克斯 / 格雷厄姆 / 费雪 / 李录等多位大师，强制 `PASS / FAIL / GRAY` 三段式输出
 - 🔒 **能力圈门禁**：看不懂的生意直接拒绝分析，不装懂
 - 📐 **反幻觉**：所有数字必须来自 tool call（akshare 实时查询），禁止 LLM 自算
 - 🧪 **AI 复核员**：每份报告由独立的复核 Agent 对照原文扫引用、扫矛盾、扫估值跳跃，产出 issues 清单
-- 🖥️ **桌面端**：Electron 打包，Windows NSIS / Portable 双发行，连 Python 都不用装
+- 🖥️ **桌面端**：Electron 打包，Windows NSIS / Portable 与 macOS DMG / ZIP 发行，内置数据边车，下载即可用
 - 🔑 **自带 API Key · 12 家 LLM Provider 即选即用**：OpenAI 兼容协议，桌面端内置预设：腾讯云 LKEAP / DeepSeek / 阿里通义 / 智谱 GLM / Kimi / 豆包 / 硅基流动 / OpenRouter / Ollama / OpenAI / Grok / 自定义。思考型模型（如 glm-4.6 / qwq）的 reasoning 链很费 token，v0.1.15 起默认预算已拉到 16384 并内置截断重试
 
 ---
@@ -34,12 +58,31 @@
 
 ### A. 桌面端（推荐 · 给"只想点按钮的你"）
 
-1. 去 [Releases](https://github.com/hahahuahai/ashare-value-copilot/releases) 下载 `价投合伙人-0.2.1-x64.exe`（NSIS 安装版）或 `价投合伙人-0.2.1-portable.exe`（免安装版）
-2. **本地需装 Python 3.10+**（数据边车用 akshare，桌面端会自动启 sidecar 子进程）
-3. 首次启动填 `LLM_BASE_URL / API_KEY / MODEL`（支持 LKEAP / DeepSeek / 本地 Ollama）
-4. 输入股票代码，点「跑」→ 得到三段式 HTML 报告 + AI 复核结论
+1. 去 [Releases](https://github.com/hahahuahai/ashare-value-copilot/releases) 下载 `价投合伙人-0.2.2-x64.exe`（Windows 安装版）、`价投合伙人-0.2.2-portable.exe`（Windows 免安装版），或 macOS 的 `.dmg / .zip` 包
+2. 首次启动填 `LLM_BASE_URL / API_KEY / MODEL`（支持 LKEAP / DeepSeek / 本地 Ollama）
+3. 输入股票代码，点「跑」→ 得到三段式 HTML 报告 + AI 复核结论
 
-桌面端把 prompts 和 sidecar 源码都打进了安装包，但 Python 解释器需要你自己有。
+桌面端会优先启动安装包内置的 `value-copilot-sidecar`，普通用户不需要安装 Python。开发者仍可用源码模式运行 `pnpm sidecar`。
+
+### macOS 本地打包
+
+```bash
+corepack enable
+pnpm install
+pnpm desktop:dist:mac
+```
+
+当前 macOS 配置默认生成 Apple Silicon (`arm64`) 的 DMG / ZIP，并会在 Mac 上用系统 `sips` / `iconutil` 从现有 PNG 生成 `resources/icon.icns`。正式分发前建议配置 Apple Developer ID 签名与 notarization；本地测试包可能需要在系统设置中允许打开。
+
+### 30 秒理解 Quick Start
+
+```bash
+pnpm install
+pnpm sidecar
+cp .env.example .env
+# 填 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL
+pnpm ask 600519
+```
 
 ### B. CLI（给开发者）
 
@@ -62,6 +105,21 @@ pnpm ask 601318             # 中国平安
 报告落到 `reports/{code}-{date}.md / .html`，AI 复核摘要落到 `.meta.json`。
 
 > 更多排错技巧见 [`RUN.md`](./RUN.md)。
+
+---
+
+## 可信度工程
+
+这个项目的重点不是让 LLM 更会说，而是限制它别乱说：
+
+| 机制 | 作用 |
+|---|---|
+| `DataPack` 单一事实源 | 所有估值、财务、股息、行业数据先由 akshare 拉取，再传给模型 |
+| 禁止 LLM 自造数字 | prompt 明确要求只能引用 JSON 中已有数字，缺失就写"我没有这个数据" |
+| 多大师分歧 | 不强行合成单一意见，保留 business / company / price 三段判断 |
+| 裁判不发明证据 | judge 只汇总大师原文和 DataPack，不引入新事实 |
+| 独立复核员 | reviewer 用独立上下文检查引用、矛盾、估值跳跃和相关性 |
+| 可追溯落盘 | HTML / Markdown / judge raw / payload / meta 文件一起保存，方便排查 |
 
 ---
 

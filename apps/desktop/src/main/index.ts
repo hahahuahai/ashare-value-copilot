@@ -28,10 +28,34 @@ const SIDECAR_URL = process.env.DATA_SIDECAR_URL ?? "http://127.0.0.1:9876";
 
 async function ensureSidecar(): Promise<boolean> {
   if (await data.health()) return true;
+  const bundledExeName = process.platform === "win32" ? "value-copilot-sidecar.exe" : "value-copilot-sidecar";
+  const bundledExe = [
+    resolve(RES_ROOT, "sidecar", "value-copilot-sidecar", bundledExeName),
+    resolve(RES_ROOT, "sidecar", bundledExeName),
+  ].find((p) => existsSync(p));
+  if (bundledExe) {
+    console.log("[main] starting bundled sidecar:", bundledExe);
+    try {
+      sidecarProc = spawn(bundledExe, [], {
+        cwd: dirname(bundledExe),
+        stdio: ["ignore", "pipe", "pipe"],
+        detached: false,
+        env: process.env,
+      });
+    } catch (e: any) {
+      dialog.showErrorBox(
+        "数据边车启动失败",
+        `内置数据边车启动失败：${e.message}\n\n请重新下载最新版安装包，或在设置里指定 PYTHON_BIN 走源码模式。`,
+      );
+      return false;
+    }
+    return await waitForSidecarReady("内置数据边车启动失败", "内置数据边车已启动但 10 秒内未就绪，请重启应用再试。");
+  }
+
   const script = resolve(RES_ROOT, "services/data-sidecar/main.py");
   if (!existsSync(script)) {
     console.error("[main] sidecar script not found:", script);
-    dialog.showErrorBox("数据边车缺失", `未找到 Python 边车脚本：\n${script}\n\n请重装应用或检查 resources。`);
+    dialog.showErrorBox("数据边车缺失", `未找到内置数据边车，也未找到 Python 边车脚本：\n${script}\n\n请重新下载最新版安装包。`);
     return false;
   }
   console.log("[main] starting sidecar:", script);
@@ -45,35 +69,42 @@ async function ensureSidecar(): Promise<boolean> {
   } catch (e: any) {
     dialog.showErrorBox(
       "未找到 Python",
-      `启动数据边车失败：${e.message}\n\n` +
+        `启动数据边车失败：${e.message}\n\n` +
+        `当前安装包没有内置数据边车，需使用源码模式。\n` +
         `请先安装 Python 3.10+，并执行：\n` +
         `  pip install -r "${resolve(RES_ROOT, "services/data-sidecar/requirements.txt")}"\n\n` +
         `或在系统环境变量中设 PYTHON_BIN 指向你的 python.exe。`
     );
     return false;
   }
+  return await waitForSidecarReady(
+    "Python 边车启动失败",
+    `Python 已找到但脚本运行异常，可能缺少依赖。\n` +
+      `请打开终端执行：\n` +
+      `  pip install -r "${resolve(RES_ROOT, "services/data-sidecar/requirements.txt")}"`
+  );
+}
+
+async function waitForSidecarReady(errorTitle: string, earlyExitMessage: string): Promise<boolean> {
+  const proc = sidecarProc;
+  if (!proc) return false;
   let earlyExit = false;
-  sidecarProc.on("error", (err) => {
+  proc.on("error", (err) => {
     earlyExit = true;
     console.error("[sidecar] spawn error:", err);
   });
-  sidecarProc.on("exit", (code) => {
+  proc.on("exit", (code) => {
     if (code !== 0 && code !== null) {
       earlyExit = true;
       console.error("[sidecar] exited early with code", code);
     }
   });
-  sidecarProc.stdout?.on("data", (b) => process.stdout.write(`[sidecar] ${b}`));
-  sidecarProc.stderr?.on("data", (b) => process.stderr.write(`[sidecar] ${b}`));
+  proc.stdout?.on("data", (b) => process.stdout.write(`[sidecar] ${b}`));
+  proc.stderr?.on("data", (b) => process.stderr.write(`[sidecar] ${b}`));
   // 等待最多 10 秒
   for (let i = 0; i < 20; i++) {
     if (earlyExit) {
-      dialog.showErrorBox(
-        "Python 边车启动失败",
-        `Python 已找到但脚本运行异常，可能缺少依赖。\n` +
-          `请打开终端执行：\n` +
-          `  pip install -r "${resolve(RES_ROOT, "services/data-sidecar/requirements.txt")}"`
-      );
+      dialog.showErrorBox(errorTitle, earlyExitMessage);
       return false;
     }
     await new Promise((r) => setTimeout(r, 500));

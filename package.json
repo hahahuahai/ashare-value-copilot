@@ -6,15 +6,19 @@
   "type": "module",
   "scripts": {
     "sidecar": "python services/data-sidecar/main.py",
+    "sidecar:build": "node scripts/build-sidecar.mjs",
+    "sidecar:build:clean": "node scripts/build-sidecar.mjs --clean",
+    "desktop:prepare:mac": "node scripts/prepare-mac-icon.mjs",
     "ask": "tsx apps/cli/src/index.ts ask",
     "ping": "tsx apps/cli/src/index.ts ping",
     "build": "tsc -b",
     "dev:cli": "tsx watch apps/cli/src/index.ts",
     "desktop:dev": "pnpm --filter @vc/desktop dev",
     "desktop:build": "pnpm --filter @vc/desktop build",
-    "desktop:dist": "pnpm --filter @vc/desktop build && cd apps/desktop && npx electron-builder",
-    "desktop:portable": "pnpm --filter @vc/desktop build && cd apps/desktop && npx electron-builder --win portable",
-    "desktop:nsis": "pnpm --filter @vc/desktop build && cd apps/desktop && npx electron-builder --win nsis",
+    "desktop:dist": "pnpm sidecar:build && pnpm --filter @vc/desktop build && cd apps/desktop && npx electron-builder",
+    "desktop:portable": "pnpm sidecar:build && pnpm --filter @vc/desktop build && cd apps/desktop && npx electron-builder --win portable",
+    "desktop:nsis": "pnpm sidecar:build && pnpm --filter @vc/desktop build && cd apps/desktop && npx electron-builder --win nsis",
+    "desktop:dist:mac": "pnpm desktop:prepare:mac && pnpm sidecar:build && pnpm --filter @vc/desktop build && cd apps/desktop && npx electron-builder --mac dmg zip",
     "verify:providers": "node scripts/verify-providers.mjs"
   },
   "workspaces": [

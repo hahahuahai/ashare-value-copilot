@@ -3,50 +3,73 @@
 @tailwind utilities;
 
 :root {
-  --color-stage: #0f0f10;
-  --color-panel: #18181a;
-  --color-panel2: #1f1f22;
-  --color-line: #2a2a2e;
-  --color-ink: #e8e6e1;
-  --color-mute: #8a8780;
-  --color-red: #c0252b;       /* 中国红 */
-  --color-red-soft: #e85257;
-  --color-gold: #d4a847;      /* 茅台金 */
-  --color-jade: #4ea672;
-  --color-amber: #d49236;
+  --color-stage: #f5f5f7;
+  --color-panel: rgba(255, 255, 255, 0.82);
+  --color-panel2: rgba(255, 255, 255, 0.62);
+  --color-line: rgba(60, 60, 67, 0.14);
+  --color-ink: #1d1d1f;
+  --color-mute: #6e6e73;
+  --color-red: #007aff;
+  --color-red-soft: #2997ff;
+  --color-gold: #0a84ff;
+  --color-jade: #34c759;
+  --color-amber: #ff9f0a;
+  --shadow-soft: 0 18px 50px rgba(0, 0, 0, 0.08);
+  --shadow-hairline: 0 1px 0 rgba(255, 255, 255, 0.75) inset;
 }
 
 html, body, #root {
   height: 100%;
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(10, 132, 255, 0.12), transparent 26%),
+    radial-gradient(circle at 85% 10%, rgba(52, 199, 89, 0.08), transparent 24%),
+    var(--color-stage);
 }
 
 /* 极简滚动条 */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #2a2a2e; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #3a3a3e; }
+::-webkit-scrollbar-thumb { background: rgba(60, 60, 67, 0.22); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(60, 60, 67, 0.34); }
 
 /* react-markdown 输出区域排版 */
 .md-body { color: var(--color-ink); line-height: 1.7; font-size: 14px; }
-.md-body h1, .md-body h2, .md-body h3 { color: var(--color-gold); font-weight: 600; margin: 1.2em 0 .6em; }
+.md-body h1, .md-body h2, .md-body h3 { color: var(--color-ink); font-weight: 650; margin: 1.2em 0 .6em; letter-spacing: 0; }
 .md-body h1 { font-size: 18px; }
 .md-body h2 { font-size: 16px; border-bottom: 1px solid var(--color-line); padding-bottom: 4px; }
 .md-body h3 { font-size: 15px; }
 .md-body p { margin: .5em 0; }
 .md-body ul, .md-body ol { margin: .4em 0 .4em 1.4em; }
 .md-body li { margin: .2em 0; }
-.md-body strong { color: var(--color-gold); }
-.md-body code { background: #2a2a2e; padding: 1px 6px; border-radius: 3px; font-size: 12.5px; }
-.md-body pre { background: #111; padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; }
+.md-body strong { color: #0a63ce; font-weight: 650; }
+.md-body code { background: rgba(118, 118, 128, 0.14); padding: 1px 6px; border-radius: 4px; font-size: 12.5px; color: #2c2c2e; }
+.md-body pre { background: rgba(242, 242, 247, 0.9); padding: 10px 12px; border-radius: 8px; overflow-x: auto; font-size: 12.5px; border: 1px solid var(--color-line); }
 .md-body pre code { background: transparent; padding: 0; }
 .md-body table { border-collapse: collapse; margin: .6em 0; font-size: 13px; }
 .md-body th, .md-body td { border: 1px solid var(--color-line); padding: 6px 10px; }
-.md-body th { background: #222; color: var(--color-gold); }
-.md-body blockquote { border-left: 3px solid var(--color-red); padding-left: 12px; color: var(--color-mute); margin: .6em 0; }
+.md-body th { background: rgba(242, 242, 247, 0.9); color: var(--color-ink); font-weight: 650; }
+.md-body blockquote { border-left: 3px solid var(--color-gold); padding-left: 12px; color: var(--color-mute); margin: .6em 0; }
 .md-body hr { border: none; border-top: 1px solid var(--color-line); margin: 1em 0; }
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+button {
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+input, select, textarea {
+  box-shadow: var(--shadow-hairline);
+}
 
 /* "思考中" 流星 */
 @keyframes pulse-dot {

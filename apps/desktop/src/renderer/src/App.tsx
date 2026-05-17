@@ -41,15 +41,15 @@ interface MasterState {
 }
 
 function StatBadge({ phase, enabledMasters }: { phase: Phase; enabledMasters: MasterInfo[] }) {
-  if (phase === "idle") return <span className="px-2 py-0.5 rounded text-xs bg-line text-mute">就绪</span>;
-  if (phase === "fetching") return <span className="px-2 py-0.5 rounded text-xs bg-amber/20 text-amber">拉取数据中</span>;
-  if (phase === "judge") return <span className="px-2 py-0.5 rounded text-xs bg-amber/20 text-amber">裁判汇总中</span>;
-  if (phase === "done") return <span className="px-2 py-0.5 rounded text-xs bg-jade/20 text-jade">已完成</span>;
-  if (phase === "error") return <span className="px-2 py-0.5 rounded text-xs bg-red/20 text-red-soft">出错</span>;
+  if (phase === "idle") return <span className="px-2 py-0.5 rounded text-xs bg-panel2 text-mute border border-line">就绪</span>;
+  if (phase === "fetching") return <span className="px-2 py-0.5 rounded text-xs bg-amber/10 text-amber border border-amber/20">拉取数据中</span>;
+  if (phase === "judge") return <span className="px-2 py-0.5 rounded text-xs bg-amber/10 text-amber border border-amber/20">裁判汇总中</span>;
+  if (phase === "done") return <span className="px-2 py-0.5 rounded text-xs bg-jade/10 text-jade border border-jade/20">已完成</span>;
+  if (phase === "error") return <span className="px-2 py-0.5 rounded text-xs bg-red/10 text-red-soft border border-red/20">出错</span>;
   // 某位大师正在跑
   const m = enabledMasters.find((x) => x.id === phase);
   const name = m?.displayName ?? phase;
-  return <span className="px-2 py-0.5 rounded text-xs bg-gold/20 text-gold">{name}思考中</span>;
+  return <span className="px-2 py-0.5 rounded text-xs bg-gold/10 text-gold border border-gold/20">{name}思考中</span>;
 }
 
 function MasterCard({
@@ -79,10 +79,10 @@ function MasterCard({
   const empty = !thinking && !answer;
 
   return (
-    <div className="flex flex-col bg-panel rounded-lg border border-line min-h-0 flex-1 min-w-[260px]">
+    <div className="flex flex-col bg-panel rounded-lg border border-line min-h-0 flex-1 min-w-[260px] shadow-[var(--shadow-soft)] backdrop-blur-xl">
       <div className="px-4 py-3 border-b border-line flex items-center justify-between">
         <div>
-          <h3 className="text-gold font-semibold text-base">{title}</h3>
+          <h3 className="text-ink font-semibold text-base">{title}</h3>
           <p className="text-mute text-xs mt-0.5">{subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -95,7 +95,7 @@ function MasterCard({
           {thinking && (
             <button
               onClick={() => setShowThinking((v) => !v)}
-              className="text-xs text-mute hover:text-gold border border-line px-2 py-0.5 rounded"
+              className="text-xs text-mute hover:text-gold border border-line bg-panel2 px-2 py-0.5 rounded"
             >
               {showThinking ? "隐藏思考" : "查看思考"}
             </button>
@@ -108,7 +108,7 @@ function MasterCard({
 
         {showThinking && thinking && (
           <div className="mb-4 p-3 rounded bg-panel2 border border-line">
-            <p className="text-xs text-mute mb-2">💭 思考过程（不计入最终报告）</p>
+            <p className="text-xs text-mute mb-2">思考过程（不计入最终报告）</p>
             <pre className="text-xs text-mute whitespace-pre-wrap font-mono leading-relaxed">{thinking}</pre>
           </div>
         )}
@@ -129,9 +129,9 @@ function MasterCard({
 
 function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="bg-panel2 rounded px-3 py-2 border border-line">
+    <div className="bg-panel2 rounded px-3 py-2 border border-line shadow-[var(--shadow-hairline)]">
       <div className="text-mute text-xs">{label}</div>
-      <div className="text-gold font-semibold text-base mt-0.5">{value}</div>
+      <div className="text-ink font-semibold text-base mt-0.5">{value}</div>
       {hint && <div className="text-mute text-[11px] mt-0.5">{hint}</div>}
     </div>
   );
@@ -410,9 +410,9 @@ export default function App() {
   return (
     <div className="h-screen flex flex-col bg-stage text-ink">
       {/* Top bar */}
-      <header className="px-4 py-3 border-b border-line flex items-center gap-3 bg-panel">
+      <header className="px-4 py-3 border-b border-line flex items-center gap-3 bg-panel/90 backdrop-blur-xl">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded bg-red flex items-center justify-center text-white font-bold text-sm">价</div>
+          <div className="w-7 h-7 rounded bg-red flex items-center justify-center text-white font-bold text-sm shadow-sm">价</div>
           <div>
             <div className="text-sm font-semibold">价投合伙人</div>
             <div className="text-xs text-mute">A-Share Value Council · v0.2</div>
@@ -436,10 +436,10 @@ export default function App() {
 
       <div className="flex-1 flex min-h-0">
         {/* 历史侧栏 */}
-        <aside className="w-56 border-r border-line bg-panel flex flex-col">
+        <aside className="w-56 border-r border-line bg-panel/70 backdrop-blur-xl flex flex-col">
           <div className="px-3 py-2 text-xs text-mute border-b border-line flex items-center justify-between">
             <span>历史报告</span>
-            <button onClick={refreshReports} className="hover:text-gold">↻</button>
+            <button onClick={refreshReports} className="hover:text-gold">刷新</button>
           </div>
           <div className="flex-1 overflow-y-auto">
             {reports.length === 0 && <p className="text-mute text-xs px-3 py-2">还没有报告</p>}
@@ -462,8 +462,8 @@ export default function App() {
         {/* 主区 */}
         <main className="flex-1 flex flex-col min-w-0 p-4 gap-3 overflow-hidden">
           {/* 输入栏 */}
-          <div className="flex items-center gap-2">
-            <div className="relative">
+          <div className="relative z-40 flex items-center gap-2 bg-panel/70 border border-line rounded-lg px-3 py-3 shadow-[var(--shadow-soft)] backdrop-blur-xl">
+            <div className="relative z-50">
               <input
                 value={code}
                 onChange={(e) => {
@@ -474,10 +474,10 @@ export default function App() {
                 onKeyDown={(e) => { if (e.key === "Enter") onAnalyze(); }}
                 placeholder="600519 / 贵州茅台"
                 disabled={phase !== "idle" && phase !== "done" && phase !== "error"}
-                className="bg-panel border border-line rounded px-3 py-2 text-base w-56 focus:outline-none focus:border-gold disabled:opacity-50"
+                className="bg-panel2 border border-line rounded px-3 py-2 text-base w-56 focus:outline-none focus:border-gold disabled:opacity-50"
               />
               {searchOpen && (searching || searchError || searchResults.length > 0 || (code.trim() && !/^\d{6}$/.test(code.trim()))) && (
-                <div className="absolute z-20 mt-1 w-72 max-h-72 overflow-y-auto rounded border border-line bg-panel shadow-xl">
+                <div className="absolute z-[60] mt-2 w-72 max-h-72 overflow-y-auto rounded border border-line bg-panel shadow-[var(--shadow-soft)] backdrop-blur-xl">
                   {searching && (
                     <div className="px-3 py-2 text-xs text-mute">搜索中...</div>
                   )}
@@ -509,7 +509,7 @@ export default function App() {
             <button
               onClick={onAnalyze}
               disabled={phase !== "idle" && phase !== "done" && phase !== "error"}
-              className="bg-red hover:bg-red-soft text-white px-4 py-2 rounded text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-red hover:bg-red-soft text-white px-4 py-2 rounded text-sm font-semibold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {phase === "idle" || phase === "done" || phase === "error" ? "开始分析" : "分析中..."}
             </button>
@@ -521,18 +521,18 @@ export default function App() {
                 {savedHtmlUrl && (
                   <button
                     onClick={() => setViewing({ title: `${stockLabel(pack?.name, pack?.code) || code} · 最新报告`, htmlUrl: savedHtmlUrl })}
-                    className="bg-gold hover:bg-amber text-stage px-3 py-1 rounded text-xs font-semibold"
+                    className="bg-gold hover:bg-red-soft text-white px-3 py-1 rounded text-xs font-semibold shadow-sm"
                   >
-                    📊 查看 HTML 报告
+                    查看 HTML 报告
                   </button>
                 )}
                 <button
                   onClick={onReview}
                   disabled={reviewing}
                   title="让另一个 AI 复核报告里的事实/逻辑/相关性问题"
-                  className="bg-jade/80 hover:bg-jade text-white px-3 py-1 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="bg-jade/90 hover:bg-jade text-white px-3 py-1 rounded text-xs font-semibold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {reviewing ? "🔍 复核中…" : "🔍 AI 复核"}
+                  {reviewing ? "复核中…" : "AI 复核"}
                 </button>
                 {reviewResult && (
                   reviewResult.ok ? (
@@ -554,11 +554,11 @@ export default function App() {
             )}
           </div>
 
-          {error && <div className="bg-red/10 border border-red text-red-soft px-3 py-2 rounded text-sm">{error}</div>}
+          {error && <div className="bg-red/10 border border-red/20 text-red-soft px-3 py-2 rounded text-sm">{error}</div>}
 
           {/* 数据快照 */}
           {pack && (
-            <div className="bg-panel rounded-lg border border-line px-4 py-3">
+            <div className="bg-panel rounded-lg border border-line px-4 py-3 shadow-[var(--shadow-soft)] backdrop-blur-xl">
               <div className="flex items-baseline gap-2 mb-2">
                 <h2 className="text-base font-semibold text-ink">{stockLabel(pack.name, pack.code)}</h2>
                 <span className="text-mute text-xs">财报 {pack.financial_rows} 期 · 拉取 {new Date(pack.fetched_at).toLocaleTimeString("zh-CN")}</span>
@@ -570,7 +570,7 @@ export default function App() {
           )}
 
           {/* v0.2.0：多大师卡片 — 动态 grid，2-4 列自适应 */}
-          <div className="flex-1 flex flex-wrap gap-3 min-h-0 overflow-y-auto">
+          <div className="relative z-0 flex-1 flex flex-wrap gap-3 min-h-0 overflow-y-auto">
             {masterCards.map((c) => (
               <MasterCard
                 key={c.id}
@@ -586,19 +586,19 @@ export default function App() {
 
           {/* 历史预览 */}
           {viewing && (
-            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setViewing(null)}>
-              <div className="bg-panel rounded-lg border border-line w-[92%] h-[92%] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="fixed inset-0 bg-black/25 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setViewing(null)}>
+              <div className="bg-panel rounded-lg border border-line w-[92%] h-[92%] flex flex-col shadow-[var(--shadow-soft)] backdrop-blur-xl" onClick={(e) => e.stopPropagation()}>
                 <div className="px-4 py-3 border-b border-line flex items-center gap-3">
-                  <h3 className="text-gold font-semibold flex-1 truncate">{viewing.title}</h3>
+                  <h3 className="text-ink font-semibold flex-1 truncate">{viewing.title}</h3>
                   {viewing.htmlPath && (
                     <>
                       <button
                         onClick={onHistoryReview}
                         disabled={historyReviewing}
                         title="对当前报告做 AI 复核（旧报告自动走降级模式）"
-                        className="bg-jade/80 hover:bg-jade text-white px-3 py-1 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="bg-jade/90 hover:bg-jade text-white px-3 py-1 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {historyReviewing ? "🔍 复核中…" : "🔍 AI 复核"}
+                        {historyReviewing ? "复核中…" : "AI 复核"}
                       </button>
                       {historyReviewMsg && (
                         <span
@@ -630,7 +630,7 @@ export default function App() {
         </main>
       </div>
 
-      <footer className="px-4 py-2 border-t border-line bg-panel text-mute text-[11px] text-center">
+      <footer className="px-4 py-2 border-t border-line bg-panel/75 backdrop-blur-xl text-mute text-[11px] text-center">
         ⚠️ 本工具仅用于研究辅助，不构成任何买卖建议 · 数据来源：akshare（公开数据）· 大师观点为 AI 模拟，非真人代言
       </footer>
 

@@ -1,16 +1,17 @@
 {
   "name": "@vc/desktop",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "pack": "electron-vite build && electron-builder --dir",
-    "dist": "electron-vite build && electron-builder",
-    "dist:portable": "electron-vite build && electron-builder --win portable",
-    "dist:nsis": "electron-vite build && electron-builder --win nsis"
+    "pack": "node ../../scripts/build-sidecar.mjs && electron-vite build && electron-builder --dir",
+    "dist": "node ../../scripts/build-sidecar.mjs && electron-vite build && electron-builder",
+    "dist:portable": "node ../../scripts/build-sidecar.mjs && electron-vite build && electron-builder --win portable",
+    "dist:nsis": "node ../../scripts/build-sidecar.mjs && electron-vite build && electron-builder --win nsis",
+    "dist:mac": "node ../../scripts/prepare-mac-icon.mjs && node ../../scripts/build-sidecar.mjs && electron-vite build && electron-builder --mac dmg zip"
   },
   "build": {
     "appId": "com.huahai.ashare-value-copilot",
@@ -35,6 +36,11 @@
         "from": "../../services",
         "to": "services",
         "filter": ["**/*.py", "**/*.txt"]
+      },
+      {
+        "from": "../../services/data-sidecar/dist",
+        "to": "sidecar",
+        "filter": ["**/*"]
       }
     ],
     "win": {
@@ -43,6 +49,20 @@
         { "target": "nsis", "arch": ["x64"] },
         { "target": "portable", "arch": ["x64"] }
       ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "mac": {
+      "icon": "resources/icon.icns",
+      "category": "public.app-category.finance",
+      "target": [
+        { "target": "dmg", "arch": ["arm64"] },
+        { "target": "zip", "arch": ["arm64"] }
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "nsis": {

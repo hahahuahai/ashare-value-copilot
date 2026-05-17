@@ -1,5 +1,11 @@
 node_modules/
 dist/
+!services/data-sidecar/dist/
+services/data-sidecar/dist/*
+!services/data-sidecar/dist/.gitkeep
+services/data-sidecar/.venv-build/
+services/data-sidecar/build/
+services/data-sidecar/*.spec
 apps/desktop/out/
 .env
 reports/

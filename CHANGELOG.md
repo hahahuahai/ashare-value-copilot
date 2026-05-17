@@ -12,10 +12,34 @@
 
 ## [Unreleased]
 
+### Added
+- macOS 桌面端出包配置：新增 `desktop:dist:mac` / `dist:mac`，默认生成 Apple Silicon (`arm64`) 的 DMG / ZIP。
+- 跨平台 sidecar 构建脚本：新增 `scripts/build-sidecar.mjs`，Windows 与 macOS 共用同一套 PyInstaller 打包入口。
+- macOS 图标准备脚本：新增 `scripts/prepare-mac-icon.mjs`，在 Mac 上用系统工具生成 `resources/icon.icns`。
+
+### Changed
+- 桌面端打包脚本从 PowerShell 专用 sidecar 构建切换为 Node 跨平台脚本，降低在 MacBook 上拉仓库后出包的环境差异。
+
 ### Planned
 - reviewer 结果落进 `reports/*.meta.json`（目前 meta 只存 buffett/duan/judge）
 - 5 支样例批量跑（茅台 / 平安 / 福耀 / 海天 / 五粮液）
 - 能力圈档案（SQLite）+ 持仓周报 + 企微推送
+
+---
+
+## [0.2.2] - 2026-05-16
+
+### Added
+- **免 Python 桌面发布包**：新增 `scripts/build-sidecar.ps1`，用 PyInstaller 将 `services/data-sidecar/main.py` 打包为内置 `value-copilot-sidecar`。
+- **发布脚本自动打包边车**：`desktop:dist` / `desktop:portable` / `desktop:nsis` 会先构建 sidecar，再打 Electron 包。
+- **GitHub Actions CI**：新增 Windows CI，覆盖 TypeScript build、sidecar executable build、desktop build。
+- **样例报告库与产品备忘**：新增 `docs/sample-reports.md` 与 `docs/product-ideas.md`，方便开源展示与后续 roadmap 拆分。
+
+### Changed
+- **桌面端启动优先使用内置边车**：普通用户下载桌面包后不再需要安装 Python；源码模式仍可回退到 `pnpm sidecar`。
+- **桌面 UI 改为浅色 Apple 风格**：主界面、设置弹窗、Markdown 报告区切换为浅色玻璃质感、Apple Blue 主色与更轻的层级。
+- **README 首屏重写**：前置样例报告、可信度工程、快速开始和开源展示信息。
+- `apps/desktop/package.json` 版本号 `0.2.1` → `0.2.2`。
 
 ---
 
