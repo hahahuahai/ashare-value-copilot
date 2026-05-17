@@ -317,6 +317,7 @@ function AiInsightPanel({
 
 export default function App() {
   const [workspace, setWorkspace] = useState<WorkspaceTab>("analysis");
+  const [mode, setMode] = useState<"start" | "workbench">("start");
   const [code, setCode] = useState("600519");
   const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -557,6 +558,8 @@ export default function App() {
   const archiveWatch = watchlist.find((x) => x.code === archiveCode) ?? null;
   const riskSignals = useMemo(() => riskSignalsFromPack(pack), [pack]);
   const compareRows = compareCodes.map((c) => watchlist.find((x) => x.code === c)).filter(Boolean) as WatchItem[];
+  const isAnalyzing = phase !== "idle" && phase !== "done" && phase !== "error";
+  const recentReports = reports.slice(0, 4);
 
   const addCurrentToWatchlist = () => {
     if (!pack) return;
@@ -682,10 +685,23 @@ export default function App() {
           </div>
         </div>
         <div className="flex-1" />
+        <div className="flex items-center rounded-lg border border-line bg-panel2 p-0.5 text-xs">
+          <button
+            onClick={() => setMode("start")}
+            className={"px-3 py-1.5 rounded-md font-semibold " + (mode === "start" ? "bg-ink text-white shadow-sm" : "text-mute hover:text-ink")}
+          >
+            开始
+          </button>
+          <button
+            onClick={() => setMode("workbench")}
+            className={"px-3 py-1.5 rounded-md font-semibold " + (mode === "workbench" ? "bg-ink text-white shadow-sm" : "text-mute hover:text-ink")}
+          >
+            工作台
+          </button>
+        </div>
         <div className="flex items-center gap-3 text-xs text-mute">
-          <span>边车 {healthInfo?.ok ? <span className="text-jade">●</span> : <span className="text-red-soft">●</span>}</span>
+          <span>数据 {healthInfo?.ok ? <span className="text-jade">●</span> : <span className="text-red-soft">●</span>}</span>
           <span>模型 <span className="text-gold">{healthInfo?.model ?? "—"}</span></span>
-          <span>大师 <span className="text-gold">{enabledMasters.length}/{8}</span></span>
           <button onClick={() => window.vc.openReportsDir()} className="text-mute hover:text-gold">📂 报告目录</button>
           <button
             onClick={() => { setForcedSetup(false); setSettingsOpen(true); }}
@@ -699,7 +715,7 @@ export default function App() {
 
       <div className="flex-1 flex min-h-0">
         {/* 历史侧栏 */}
-        <aside className="w-56 border-r border-line bg-panel/70 backdrop-blur-xl flex flex-col">
+        {mode === "workbench" && <aside className="w-56 border-r border-line bg-panel/70 backdrop-blur-xl flex flex-col">
           <div className="px-3 py-3 border-b border-line">
             <div className="text-xs text-mute mb-2">投研工作台</div>
             <div className="grid grid-cols-2 gap-1">
@@ -740,12 +756,12 @@ export default function App() {
               </button>
             ))}
           </div>
-        </aside>
+        </aside>}
 
         {/* 主区 */}
         <main className="flex-1 flex flex-col min-w-0 p-4 gap-3 overflow-hidden">
           {/* 输入栏 */}
-          <div className="relative z-40 flex items-center gap-2 bg-panel/70 border border-line rounded-lg px-3 py-3 shadow-[var(--shadow-soft)] backdrop-blur-xl">
+          <div className={"relative z-40 flex items-center gap-2 bg-panel/70 border border-line rounded-lg px-3 py-3 shadow-[var(--shadow-soft)] backdrop-blur-xl " + (mode === "start" ? "w-full max-w-5xl mx-auto" : "")}>
             <div className="relative z-50">
               <input
                 value={code}
@@ -797,7 +813,7 @@ export default function App() {
               {phase === "idle" || phase === "done" || phase === "error" ? "开始分析" : "分析中..."}
             </button>
             <StatBadge phase={phase} enabledMasters={enabledMasters} />
-            <span className="text-mute text-xs">{statusText}</span>
+            <span className="text-mute text-xs truncate">{statusText}</span>
             <div className="flex-1" />
             {savedPath && phase === "done" && (
               <>
@@ -849,7 +865,90 @@ export default function App() {
 
           <AiInsightPanel result={aiResult} busy={aiBusy} onClose={() => { setAiResult(null); setAiBusy(false); }} />
 
-          {workspace === "analysis" ? (
+          {mode === "start" ? (
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="max-w-5xl mx-auto space-y-3">
+                {!pack && !isAnalyzing && (
+                  <section className="bg-panel rounded-lg border border-line px-6 py-8 shadow-[var(--shadow-soft)] backdrop-blur-xl">
+                    <div className="max-w-2xl">
+                      <h1 className="text-2xl font-semibold text-ink tracking-normal">研究一家公司</h1>
+                      <p className="mt-2 text-sm text-mute leading-relaxed">输入公司名称或股票代码，生成报告后再做 AI 复核。</p>
+                    </div>
+                    <div className="mt-6 grid grid-cols-4 gap-2">
+                      {recentReports.length === 0 ? (
+                        <div className="col-span-4 text-sm text-mute bg-panel2 border border-line rounded-lg px-4 py-5">暂无历史报告。</div>
+                      ) : recentReports.map((r) => (
+                        <button key={r.path} onClick={() => onPickReport(r)} className="text-left bg-panel2 border border-line rounded-lg px-3 py-3 hover:bg-white">
+                          <div className="text-sm font-semibold text-ink truncate">{r.name || r.code || r.file}</div>
+                          <div className="text-xs text-mute mt-1">{r.code ? `${r.code} · ${r.date}` : r.date}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {(pack || isAnalyzing) && (
+                  <section className="bg-panel rounded-lg border border-line px-4 py-4 shadow-[var(--shadow-soft)] backdrop-blur-xl">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <h2 className="text-lg font-semibold text-ink truncate">{pack ? stockLabel(pack.name, pack.code) : "正在生成报告"}</h2>
+                        <p className="text-xs text-mute mt-1">{pack ? `财报 ${pack.financial_rows} 期 · 拉取 ${new Date(pack.fetched_at).toLocaleTimeString("zh-CN")}` : statusText}</p>
+                      </div>
+                      <StatBadge phase={phase} enabledMasters={enabledMasters} />
+                    </div>
+                    {pack && (
+                      <div className="grid grid-cols-6 gap-2 mt-4">
+                        {valStats.map((s) => <StatTile key={s.label} {...s} />)}
+                      </div>
+                    )}
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      {savedHtmlUrl && (
+                        <button onClick={() => setViewing({ title: `${stockLabel(pack?.name, pack?.code) || code} · 最新报告`, htmlUrl: savedHtmlUrl })} className="bg-gold hover:bg-red-soft text-white px-4 py-2 rounded text-sm font-semibold shadow-sm">
+                          查看报告
+                        </button>
+                      )}
+                      {savedPath && (
+                        <button onClick={onReview} disabled={reviewing} className="bg-ink hover:bg-[#2c2c2e] text-white border border-black/10 px-4 py-2 rounded text-sm font-semibold shadow-sm disabled:opacity-50">
+                          {reviewing ? "复核中…" : "AI 复核"}
+                        </button>
+                      )}
+                      {pack && (
+                        <button onClick={addCurrentToWatchlist} className="bg-panel2 hover:bg-white text-ink border border-line px-4 py-2 rounded text-sm font-semibold shadow-sm">
+                          {activeWatch ? "更新自选" : "加入自选"}
+                        </button>
+                      )}
+                      {pack && (
+                        <button onClick={() => runAiTask("daily-brief")} disabled={aiBusy} className="bg-panel2 hover:bg-white text-ink border border-line px-4 py-2 rounded text-sm font-semibold shadow-sm disabled:opacity-50">
+                          AI 摘要
+                        </button>
+                      )}
+                      {reviewResult && (
+                        <span className={(reviewResult.ok ? "text-jade" : "text-red-soft") + " text-xs"}>
+                          {reviewResult.ok ? `✓ 复核 ${reviewResult.score}/100 · ${reviewResult.issues} 条问题` : "✗ 复核失败"}
+                        </span>
+                      )}
+                    </div>
+                  </section>
+                )}
+
+                {(isAnalyzing || masterCards.some((c) => c.answer || c.thinking)) && (
+                  <section className="grid grid-cols-2 gap-3">
+                    {masterCards.map((c) => (
+                      <MasterCard
+                        key={c.id}
+                        title={c.displayName}
+                        subtitle={c.subtitle}
+                        thinking={c.thinking}
+                        answer={c.answer}
+                        active={c.active}
+                        done={c.done}
+                      />
+                    ))}
+                  </section>
+                )}
+              </div>
+            </div>
+          ) : workspace === "analysis" ? (
             <>
               {pack && (
                 <div className="bg-panel rounded-lg border border-line px-4 py-3 shadow-[var(--shadow-soft)] backdrop-blur-xl">
