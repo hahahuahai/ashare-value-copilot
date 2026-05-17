@@ -6,7 +6,9 @@ import { spawnSync } from "node:child_process";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
 const resourcesDir = join(repoRoot, "apps", "desktop", "resources");
-const sourcePng = join(resourcesDir, "icon-256.png");
+const sourcePng = existsSync(join(resourcesDir, "icon.png"))
+  ? join(resourcesDir, "icon.png")
+  : join(resourcesDir, "icon-256.png");
 const iconsetDir = join(resourcesDir, "icon.iconset");
 const icnsPath = join(resourcesDir, "icon.icns");
 
