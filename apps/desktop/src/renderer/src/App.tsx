@@ -21,6 +21,9 @@ interface DataPackInfo {
   quote: any;
   profile: any;
   financial_rows: number;
+  dividend_yield_pct?: number | null;
+  pe_percentile?: number | null;
+  dataQuality?: DataQualityInfo;
 }
 
 interface ReportItem {
@@ -55,6 +58,16 @@ interface WatchItem {
   pb?: number | null;
   marketCap?: number | null;
   financialRows?: number;
+  dividendYield?: number | null;
+  pePercentile?: number | null;
+  dataQuality?: DataQualityInfo;
+}
+
+interface DataQualityInfo {
+  ok: boolean;
+  sources?: Record<string, string | null>;
+  warnings?: string[];
+  missing?: string[];
 }
 
 interface Principle {
@@ -76,6 +89,17 @@ interface AiTaskResult {
   actions: string[];
   warnings: string[];
   error?: string;
+}
+
+interface DiagnosticsInfo {
+  appVersion?: string;
+  isPackaged?: boolean;
+  sidecar?: { ok: boolean; url: string; pid?: number | null; running?: boolean };
+  model?: string;
+  llmKeySet?: boolean;
+  paths?: Record<string, string>;
+  reports?: { count: number; trashCount: number };
+  recentEvents?: Array<{ time: string; level: "info" | "warn" | "error"; message: string }>;
 }
 
 const workspaceTabs: Array<{ id: WorkspaceTab; label: string; hint: string }> = [
@@ -186,6 +210,23 @@ function StatTile({ label, value, hint }: { label: string; value: string; hint?:
   );
 }
 
+function DataQualityBadge({ quality }: { quality?: DataQualityInfo }) {
+  if (!quality) return <span className="text-xs text-mute">数据质量 —</span>;
+  const missing = quality.missing?.length ?? 0;
+  const warnings = quality.warnings?.length ?? 0;
+  if (quality.ok) {
+    return <span className="text-xs text-jade bg-jade/10 border border-jade/20 rounded px-2 py-1">数据完整</span>;
+  }
+  return (
+    <span
+      className="text-xs text-amber bg-amber/10 border border-amber/20 rounded px-2 py-1"
+      title={[...(quality.missing ?? []).map((x) => `缺失 ${x}`), ...(quality.warnings ?? [])].join("\n")}
+    >
+      数据需复核 · 缺 {missing} · 警 {warnings}
+    </span>
+  );
+}
+
 function fmt(n: any, digits = 2): string {
   if (n === null || n === undefined || n === "") return "—";
   const v = Number(n);
@@ -240,6 +281,9 @@ function watchFromPack(pack: DataPackInfo, previous?: WatchItem): WatchItem {
     pb: Number.isFinite(Number(valuation.pb)) ? Number(valuation.pb) : null,
     marketCap: Number.isFinite(Number(valuation.total_mv)) ? Number(valuation.total_mv) : null,
     financialRows: pack.financial_rows,
+    dividendYield: Number.isFinite(Number(pack.dividend_yield_pct)) ? Number(pack.dividend_yield_pct) : null,
+    pePercentile: Number.isFinite(Number(pack.pe_percentile)) ? Number(pack.pe_percentile) : null,
+    dataQuality: pack.dataQuality,
   };
 }
 
@@ -343,6 +387,12 @@ export default function App() {
   const [historyReviewMsg, setHistoryReviewMsg] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [forcedSetup, setForcedSetup] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsInfo | null>(null);
+  const [reportQuery, setReportQuery] = useState("");
+  const [selectedReportPaths, setSelectedReportPaths] = useState<string[]>([]);
+  const [refreshingWatchCodes, setRefreshingWatchCodes] = useState<string[]>([]);
+  const [appStateLoaded, setAppStateLoaded] = useState(false);
   const [watchlist, setWatchlist] = useState<WatchItem[]>(() => readJson<WatchItem[]>("vc.watchlist", []));
   const [principles, setPrinciples] = useState<Principle[]>(() => readJson<Principle[]>("vc.principles", [
     { id: "p1", text: "不研究无法理解商业模式的公司。", enabled: true },
@@ -358,6 +408,24 @@ export default function App() {
 
   useEffect(() => writeJson("vc.watchlist", watchlist), [watchlist]);
   useEffect(() => writeJson("vc.principles", principles), [principles]);
+  useEffect(() => {
+    let cancelled = false;
+    window.vc.getAppState()
+      .then((state) => {
+        if (cancelled) return;
+        if (Array.isArray(state?.watchlist)) setWatchlist(state.watchlist);
+        if (Array.isArray(state?.principles)) setPrinciples(state.principles);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setAppStateLoaded(true);
+      });
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    if (!appStateLoaded) return;
+    window.vc.saveAppState({ watchlist, principles }).catch(() => {});
+  }, [appStateLoaded, watchlist, principles]);
 
   const refreshHealth = async () => setHealthInfo(await window.vc.health());
   const refreshReports = async () => setReports(await window.vc.listReports());
@@ -560,6 +628,12 @@ export default function App() {
   const compareRows = compareCodes.map((c) => watchlist.find((x) => x.code === c)).filter(Boolean) as WatchItem[];
   const isAnalyzing = phase !== "idle" && phase !== "done" && phase !== "error";
   const recentReports = reports.slice(0, 4);
+  const filteredReports = useMemo(() => {
+    const q = reportQuery.trim().toLowerCase();
+    if (!q) return reports;
+    return reports.filter((r) => [r.name, r.code, r.date, r.file].some((x) => String(x ?? "").toLowerCase().includes(q)));
+  }, [reports, reportQuery]);
+  const selectedReportCount = selectedReportPaths.length;
 
   const addCurrentToWatchlist = () => {
     if (!pack) return;
@@ -577,6 +651,34 @@ export default function App() {
 
   const removeWatchItem = (code: string) => {
     setWatchlist((prev) => prev.filter((x) => x.code !== code));
+  };
+
+  const refreshDiagnostics = async () => {
+    setDiagnostics(await window.vc.getDiagnostics());
+  };
+
+  const openDiagnostics = async () => {
+    setDiagnosticsOpen(true);
+    await refreshDiagnostics();
+  };
+
+  const refreshWatchItem = async (item: WatchItem) => {
+    if (refreshingWatchCodes.includes(item.code)) return;
+    setRefreshingWatchCodes((prev) => [...prev, item.code]);
+    try {
+      const fresh = await window.vc.refreshWatchItem(item.code);
+      setWatchlist((prev) => prev.map((x) => x.code === item.code ? { ...x, ...fresh, group: x.group, verdict: x.verdict, note: x.note } : x));
+    } catch (e: any) {
+      setError(`刷新 ${item.name || item.code} 失败：${String(e?.message ?? e)}`);
+    } finally {
+      setRefreshingWatchCodes((prev) => prev.filter((x) => x !== item.code));
+    }
+  };
+
+  const refreshAllWatchlist = async () => {
+    for (const item of watchlist) {
+      await refreshWatchItem(item);
+    }
   };
 
   const exportText = useMemo(() => {
@@ -616,6 +718,8 @@ export default function App() {
             : null,
         currentPack: pack,
         currentStats: usefulCurrentStats.length > 0 ? usefulCurrentStats : null,
+        dataQuality: pack?.dataQuality ?? activeWatch?.dataQuality ?? null,
+        trustPolicy: "AI 只能基于已提供的数据与用户原则给出辅助判断；若 dataQuality 不完整，必须先提示复核数据源，再给结论。",
         hasCurrentPanelData: Boolean(pack && usefulCurrentStats.length > 0),
         watchlist,
         screenedWatchlist,
@@ -661,11 +765,12 @@ export default function App() {
 
   const onDeleteReport = async (r: ReportItem) => {
     const reportLabel = stockLabel(r.name, r.code) || r.file;
-    const ok = window.confirm(`删除历史报告「${reportLabel} · ${r.date || r.type.toUpperCase()}」？\n\n这会同时删除 HTML、Markdown、原始数据和复核结果文件。`);
+    const ok = window.confirm(`删除历史报告「${reportLabel} · ${r.date || r.type.toUpperCase()}」？\n\n文件会移入报告目录下的 .trash，不会直接永久删除。`);
     if (!ok) return;
     try {
       await window.vc.deleteReport(r.path);
       await refreshReports();
+      setSelectedReportPaths((prev) => prev.filter((x) => x !== r.path));
       if (viewing?.htmlPath === r.path || viewing?.title.includes(reportLabel)) {
         setViewing(null);
         setHistoryReviewMsg(null);
@@ -677,6 +782,21 @@ export default function App() {
       }
     } catch (e: any) {
       setError(`删除报告失败：${String(e?.message ?? e)}`);
+    }
+  };
+
+  const onDeleteSelectedReports = async () => {
+    if (selectedReportPaths.length === 0) return;
+    const ok = window.confirm(`删除选中的 ${selectedReportPaths.length} 份历史报告？\n\n文件会移入报告目录下的 .trash。`);
+    if (!ok) return;
+    try {
+      await window.vc.deleteReports(selectedReportPaths);
+      setSelectedReportPaths([]);
+      setViewing(null);
+      setHistoryReviewMsg(null);
+      await refreshReports();
+    } catch (e: any) {
+      setError(`批量删除失败：${String(e?.message ?? e)}`);
     }
   };
 
@@ -717,7 +837,7 @@ export default function App() {
           <div className="w-7 h-7 rounded bg-red flex items-center justify-center text-white font-bold text-sm shadow-sm">价</div>
           <div>
             <div className="text-sm font-semibold">价投合伙人</div>
-            <div className="text-xs text-mute">A-Share Value Council · v0.2</div>
+            <div className="text-xs text-mute">A-Share Value Council · v0.2.6</div>
           </div>
         </div>
         <div className="flex-1" />
@@ -738,6 +858,7 @@ export default function App() {
         <div className="flex items-center gap-3 text-xs text-mute">
           <span>数据 {healthInfo?.ok ? <span className="text-jade">●</span> : <span className="text-red-soft">●</span>}</span>
           <span>模型 <span className="text-gold">{healthInfo?.model ?? "—"}</span></span>
+          <button onClick={openDiagnostics} className="text-mute hover:text-gold">诊断</button>
           <button onClick={() => window.vc.openReportsDir()} className="text-mute hover:text-gold">📂 报告目录</button>
           <button
             onClick={() => { setForcedSetup(false); setSettingsOpen(true); }}
@@ -774,15 +895,34 @@ export default function App() {
           </div>
           <div className="px-3 py-2 text-xs text-mute border-b border-line flex items-center justify-between">
             <span>历史报告</span>
-            <button onClick={refreshReports} className="hover:text-gold">刷新</button>
+            <div className="flex items-center gap-2">
+              {selectedReportCount > 0 && <button onClick={onDeleteSelectedReports} className="hover:text-red-soft">删除{selectedReportCount}</button>}
+              <button onClick={refreshReports} className="hover:text-gold">刷新</button>
+            </div>
+          </div>
+          <div className="px-3 py-2 border-b border-line">
+            <input
+              value={reportQuery}
+              onChange={(e) => setReportQuery(e.target.value)}
+              placeholder="搜索历史"
+              className="w-full bg-panel2 border border-line rounded px-2 py-1.5 text-xs focus:outline-none focus:border-gold"
+            />
           </div>
           <div className="flex-1 overflow-y-auto">
             {reports.length === 0 && <p className="text-mute text-xs px-3 py-2">还没有报告</p>}
-            {reports.map((r) => (
+            {reports.length > 0 && filteredReports.length === 0 && <p className="text-mute text-xs px-3 py-2">没有匹配的报告</p>}
+            {filteredReports.map((r) => (
               <div key={r.path} className="group border-b border-line hover:bg-panel2 flex items-center">
+                <input
+                  type="checkbox"
+                  checked={selectedReportPaths.includes(r.path)}
+                  onChange={(e) => setSelectedReportPaths((prev) => e.target.checked ? [...prev, r.path] : prev.filter((x) => x !== r.path))}
+                  className="ml-2"
+                  title="选择报告"
+                />
                 <button
                   onClick={() => onPickReport(r)}
-                  className="min-w-0 flex-1 text-left px-3 py-2 text-sm"
+                  className="min-w-0 flex-1 text-left px-2 py-2 text-sm"
                 >
                   <div className="text-ink flex items-center gap-1 min-w-0">
                     <span className="truncate">{r.name || r.code || r.file}</span>
@@ -938,6 +1078,7 @@ export default function App() {
                         <h2 className="text-lg font-semibold text-ink truncate">{pack ? stockLabel(pack.name, pack.code) : "正在生成报告"}</h2>
                         <p className="text-xs text-mute mt-1">{pack ? `财报 ${pack.financial_rows} 期 · 拉取 ${new Date(pack.fetched_at).toLocaleTimeString("zh-CN")}` : statusText}</p>
                       </div>
+                      {pack && <DataQualityBadge quality={pack.dataQuality} />}
                       <StatBadge phase={phase} enabledMasters={enabledMasters} />
                     </div>
                     {pack && (
@@ -999,6 +1140,7 @@ export default function App() {
                   <div className="flex items-baseline gap-2 mb-2">
                     <h2 className="text-base font-semibold text-ink">{stockLabel(pack.name, pack.code)}</h2>
                     <span className="text-mute text-xs">财报 {pack.financial_rows} 期 · 拉取 {new Date(pack.fetched_at).toLocaleTimeString("zh-CN")}</span>
+                    <DataQualityBadge quality={pack.dataQuality} />
                     <div className="flex-1" />
                     <button onClick={() => runAiTask("daily-brief")} disabled={aiBusy} className="bg-ink hover:bg-[#2c2c2e] text-white px-3 py-1 rounded text-xs font-semibold disabled:opacity-50">AI 今日简报</button>
                     <button onClick={() => runAiTask("report-editor")} disabled={aiBusy} className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-1 rounded text-xs font-semibold disabled:opacity-50">AI 摘要</button>
@@ -1034,16 +1176,18 @@ export default function App() {
                     </div>
                     <div className="flex items-center gap-2">
                       <button onClick={() => runAiTask("watchlist-organize")} disabled={aiBusy || watchlist.length === 0} className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-50">AI 整理</button>
+                      <button onClick={refreshAllWatchlist} disabled={watchlist.length === 0 || refreshingWatchCodes.length > 0} className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-50">刷新全部</button>
                       {pack && <button onClick={addCurrentToWatchlist} className="bg-ink text-white hover:bg-[#2c2c2e] px-3 py-1.5 rounded text-xs font-semibold">加入当前公司</button>}
                     </div>
                   </div>
                   <div className="divide-y divide-line">
                     {watchlist.length === 0 && <div className="px-4 py-8 text-sm text-mute">暂无自选股。先完成一次分析，然后点击“加入自选”。</div>}
                     {watchlist.map((item) => (
-                      <div key={item.code} className="px-4 py-3 grid grid-cols-[1.2fr_0.8fr_1.2fr_auto] gap-3 items-center hover:bg-panel2/60">
+                      <div key={item.code} className="px-4 py-3 grid grid-cols-[1.2fr_0.8fr_1.2fr_auto_auto] gap-3 items-center hover:bg-panel2/60">
                         <button onClick={() => { setCode(stockLabel(item.name, item.code)); setSelectedArchiveCode(item.code); setWorkspace("archive"); }} className="text-left">
                           <div className="text-sm font-semibold text-ink">{item.name} <span className="font-mono text-xs text-gold">{item.code}</span></div>
-                          <div className="text-xs text-mute">更新 {new Date(item.updatedAt).toLocaleString("zh-CN")}</div>
+                          <div className="text-xs text-mute">更新 {new Date(item.updatedAt).toLocaleString("zh-CN")} · PE {fmt(item.pe)} · PB {fmt(item.pb)}</div>
+                          <div className="mt-1"><DataQualityBadge quality={item.dataQuality} /></div>
                         </button>
                         <select value={item.verdict} onChange={(e) => updateWatchItem(item.code, { verdict: e.target.value })} className="bg-panel2 border border-line rounded px-2 py-1.5 text-xs">
                           <option>待判断</option>
@@ -1052,6 +1196,7 @@ export default function App() {
                           <option>暂不研究</option>
                         </select>
                         <input value={item.note} onChange={(e) => updateWatchItem(item.code, { note: e.target.value })} placeholder="跟踪备注" className="bg-panel2 border border-line rounded px-2 py-1.5 text-xs" />
+                        <button onClick={() => refreshWatchItem(item)} disabled={refreshingWatchCodes.includes(item.code)} className="text-xs text-mute hover:text-gold disabled:opacity-50">{refreshingWatchCodes.includes(item.code) ? "刷新中" : "刷新"}</button>
                         <button onClick={() => removeWatchItem(item.code)} className="text-xs text-mute hover:text-red-soft">删除</button>
                       </div>
                     ))}
@@ -1162,8 +1307,9 @@ export default function App() {
                     <div className="flex items-center gap-3">
                       <div className="flex-1">
                         <h2 className="text-base font-semibold text-ink">公司对比</h2>
-                        <p className="text-xs text-mute mt-0.5">选择两家公司，快速比较估值、结论和备注。</p>
+                        <p className="text-xs text-mute mt-0.5">选择两家公司，快速比较估值、股息、历史位置、结论和数据质量。</p>
                       </div>
+                      <button onClick={() => compareRows.forEach((item) => refreshWatchItem(item))} disabled={compareRows.length === 0 || refreshingWatchCodes.length > 0} className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-50">刷新所选</button>
                       <button onClick={() => runAiTask("compare-explain")} disabled={aiBusy || compareRows.length < 2} className="bg-ink hover:bg-[#2c2c2e] text-white px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-50">AI 对比结论</button>
                     </div>
                   </div>
@@ -1183,8 +1329,11 @@ export default function App() {
                           <StatTile label="PE" value={fmt(item.pe)} />
                           <StatTile label="PB" value={fmt(item.pb)} />
                           <StatTile label="市值" value={fmtBig(item.marketCap)} />
+                          <StatTile label="股息率" value={item.dividendYield == null ? "—" : `${fmt(item.dividendYield)}%`} />
+                          <StatTile label="PE 分位" value={item.pePercentile == null ? "—" : `${fmt(item.pePercentile)}%`} />
+                          <StatTile label="财务期数" value={fmt(item.financialRows, 0)} />
                         </div>
-                        <div className="mt-3 text-xs text-mute">结论：{item.verdict}</div>
+                        <div className="mt-3 flex items-center gap-2 text-xs text-mute"><span>结论：{item.verdict}</span><DataQualityBadge quality={item.dataQuality} /></div>
                         <div className="mt-1 text-xs text-mute">备注：{item.note || "暂无"}</div>
                       </div>
                     ))}
@@ -1279,6 +1428,55 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {diagnosticsOpen && (
+        <div className="fixed inset-0 bg-black/25 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setDiagnosticsOpen(false)}>
+          <div className="bg-panel rounded-lg border border-line w-[760px] max-w-[92vw] max-h-[86vh] overflow-hidden shadow-[var(--shadow-soft)]" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-line flex items-center gap-3">
+              <div className="flex-1">
+                <h3 className="text-ink font-semibold">诊断中心</h3>
+                <p className="text-xs text-mute mt-0.5">环境、数据边车、报告目录与最近事件。</p>
+              </div>
+              <button onClick={refreshDiagnostics} className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-1 rounded text-xs font-semibold">刷新</button>
+              <button onClick={() => setDiagnosticsOpen(false)} className="text-mute hover:text-ink">✕</button>
+            </div>
+            <div className="p-4 overflow-y-auto max-h-[calc(86vh-64px)] space-y-4">
+              <div className="grid grid-cols-4 gap-2">
+                <StatTile label="版本" value={diagnostics?.appVersion ?? "—"} />
+                <StatTile label="边车" value={diagnostics?.sidecar?.ok ? "正常" : "异常"} />
+                <StatTile label="模型" value={diagnostics?.model || "未设置"} />
+                <StatTile label="报告" value={fmt(diagnostics?.reports?.count, 0)} hint={`回收站 ${fmt(diagnostics?.reports?.trashCount, 0)}`} />
+              </div>
+              <div className="bg-panel2 border border-line rounded-lg p-3">
+                <div className="text-xs font-semibold text-ink mb-2">环境</div>
+                <div className="grid grid-cols-2 gap-2 text-xs text-mute">
+                  <div>安装模式：{diagnostics?.isPackaged ? "安装包" : "开发模式"}</div>
+                  <div>LLM Key：{diagnostics?.llmKeySet ? "已设置" : "未设置"}</div>
+                  <div>边车地址：{diagnostics?.sidecar?.url ?? "—"}</div>
+                  <div>边车 PID：{diagnostics?.sidecar?.pid ?? "—"}</div>
+                </div>
+              </div>
+              <div className="bg-panel2 border border-line rounded-lg p-3">
+                <div className="text-xs font-semibold text-ink mb-2">本地路径</div>
+                <div className="space-y-1 text-xs text-mute font-mono break-all">
+                  {Object.entries(diagnostics?.paths ?? {}).map(([k, v]) => <div key={k}>{k}: {v}</div>)}
+                </div>
+              </div>
+              <div className="bg-panel2 border border-line rounded-lg p-3">
+                <div className="text-xs font-semibold text-ink mb-2">最近事件</div>
+                <div className="space-y-1 text-xs text-mute max-h-48 overflow-y-auto">
+                  {(diagnostics?.recentEvents ?? []).length === 0 && <div>暂无事件</div>}
+                  {(diagnostics?.recentEvents ?? []).map((ev, idx) => (
+                    <div key={`${ev.time}-${idx}`} className={ev.level === "error" ? "text-red-soft" : ev.level === "warn" ? "text-amber" : "text-mute"}>
+                      {new Date(ev.time).toLocaleTimeString("zh-CN")} · {ev.level} · {ev.message}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer className="px-4 py-2 border-t border-line bg-panel/75 backdrop-blur-xl text-mute text-[11px] text-center">
         ⚠️ 本工具仅用于研究辅助，不构成任何买卖建议 · 数据来源：akshare（公开数据）· 大师观点为 AI 模拟，非真人代言

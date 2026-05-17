@@ -9,7 +9,7 @@ import { RES_ROOT, USER_ROOT, IS_PACKAGED } from "./bootstrap-env";
 
 import { app, BrowserWindow, ipcMain, shell, dialog } from "electron";
 import { spawn, ChildProcess } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, renameSync } from "node:fs";
 import { resolve, dirname, join, basename, extname } from "node:path";
 
 import { buildDataPack, data } from "@vc/data";
@@ -27,6 +27,12 @@ const here = __dirname;
 let sidecarProc: ChildProcess | null = null;
 let sidecarStarting: Promise<boolean> | null = null;
 const SIDECAR_URL = process.env.DATA_SIDECAR_URL ?? "http://127.0.0.1:9876";
+const RECENT_EVENTS: Array<{ time: string; level: "info" | "warn" | "error"; message: string }> = [];
+
+function logEvent(level: "info" | "warn" | "error", message: string) {
+  RECENT_EVENTS.unshift({ time: new Date().toISOString(), level, message });
+  RECENT_EVENTS.splice(80);
+}
 
 async function ensureSidecar(): Promise<boolean> {
   if (await data.health()) return true;
@@ -47,6 +53,7 @@ async function startSidecar(): Promise<boolean> {
   ].find((p) => existsSync(p));
   if (bundledExe) {
     console.log("[main] starting bundled sidecar:", bundledExe);
+    logEvent("info", `starting bundled sidecar: ${bundledExe}`);
     try {
       sidecarProc = spawn(bundledExe, [], {
         cwd: dirname(bundledExe),
@@ -71,6 +78,7 @@ async function startSidecar(): Promise<boolean> {
     return false;
   }
   console.log("[main] starting sidecar:", script);
+  logEvent("info", `starting python sidecar: ${script}`);
   const pythonCmd = process.env.PYTHON_BIN || (process.platform === "win32" ? "python" : "python3");
   try {
     sidecarProc = spawn(pythonCmd, [script], {
@@ -103,16 +111,26 @@ async function waitForSidecarReady(errorTitle: string, earlyExitMessage: string)
   let earlyExit = false;
   proc.on("error", (err) => {
     earlyExit = true;
+    logEvent("error", `sidecar spawn error: ${err.message}`);
     console.error("[sidecar] spawn error:", err);
   });
   proc.on("exit", (code) => {
     if (code !== 0 && code !== null) {
       earlyExit = true;
+      logEvent("error", `sidecar exited early with code ${code}`);
       console.error("[sidecar] exited early with code", code);
     }
   });
-  proc.stdout?.on("data", (b) => process.stdout.write(`[sidecar] ${b}`));
-  proc.stderr?.on("data", (b) => process.stderr.write(`[sidecar] ${b}`));
+  proc.stdout?.on("data", (b) => {
+    const text = String(b).trim();
+    if (text) logEvent("info", `[sidecar] ${text}`);
+    process.stdout.write(`[sidecar] ${b}`);
+  });
+  proc.stderr?.on("data", (b) => {
+    const text = String(b).trim();
+    if (text) logEvent("warn", `[sidecar] ${text}`);
+    process.stderr.write(`[sidecar] ${b}`);
+  });
   // 等待最多 10 秒
   for (let i = 0; i < 20; i++) {
     if (earlyExit) {
@@ -136,6 +154,8 @@ function killSidecar() {
 
 // === 历史报告（写入用户数据目录，不污染只读资源） ===
 const REPORTS_DIR = resolve(USER_ROOT, "reports");
+const TRASH_DIR = resolve(REPORTS_DIR, ".trash");
+const APP_STATE_PATH = resolve(USER_ROOT, "app-state.json");
 
 function safeFilePart(value: string): string {
   return String(value ?? "")
@@ -230,6 +250,11 @@ function listReports() {
     .sort((a, b) => b.mtime - a.mtime);
 }
 
+function countTrashItems(): number {
+  if (!existsSync(TRASH_DIR)) return 0;
+  return readdirSync(TRASH_DIR).length;
+}
+
 function assertReportPath(inputPath: string): string {
   const path = resolve(String(inputPath ?? ""));
   const root = resolve(REPORTS_DIR);
@@ -240,12 +265,14 @@ function assertReportPath(inputPath: string): string {
   return path;
 }
 
-function deleteReport(inputPath: string): { ok: boolean; deleted: string[] } {
+function deleteReport(inputPath: string): { ok: boolean; deleted: string[]; trashDir: string } {
   const path = assertReportPath(inputPath);
   const ext = extname(path);
   const base = path.slice(0, -ext.length);
   const fileBase = basename(base);
   const deleted: string[] = [];
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const trashDir = join(TRASH_DIR, `${fileBase}-${stamp}`);
   const candidates = [
     `${base}.html`,
     `${base}.md`,
@@ -257,11 +284,84 @@ function deleteReport(inputPath: string): { ok: boolean; deleted: string[] } {
 
   for (const candidate of candidates) {
     if (basename(candidate).startsWith(fileBase) && existsSync(candidate)) {
-      unlinkSync(candidate);
+      if (!existsSync(trashDir)) mkdirSync(trashDir, { recursive: true });
+      renameSync(candidate, join(trashDir, basename(candidate)));
       deleted.push(candidate);
     }
   }
-  return { ok: true, deleted };
+  logEvent("info", `moved report to trash: ${fileBase}`);
+  return { ok: true, deleted, trashDir };
+}
+
+function deleteReports(paths: string[]) {
+  const results = paths.map((p) => deleteReport(p));
+  return { ok: true, results, deleted: results.flatMap((r) => r.deleted) };
+}
+
+function readAppState(): any {
+  if (!existsSync(APP_STATE_PATH)) return {};
+  try {
+    return JSON.parse(readFileSync(APP_STATE_PATH, "utf-8"));
+  } catch (e: any) {
+    logEvent("warn", `app-state read failed: ${e?.message ?? e}`);
+    return {};
+  }
+}
+
+function writeAppState(state: any) {
+  if (!existsSync(USER_ROOT)) mkdirSync(USER_ROOT, { recursive: true });
+  writeFileSync(APP_STATE_PATH, JSON.stringify({ ...(state ?? {}), savedAt: new Date().toISOString() }, null, 2), "utf-8");
+  return { ok: true, path: APP_STATE_PATH };
+}
+
+function dataQualityFromPack(pack: any) {
+  const fields: Array<[string, any]> = [
+    ["profile", pack?.profile],
+    ["valuation", pack?.valuation],
+    ["quote", pack?.quote],
+    ["financial", pack?.financial],
+    ["dividend", pack?.dividend],
+    ["historicalPE", pack?.historicalPE],
+    ["industryCompare", pack?.industryCompare],
+  ];
+  const sources: Record<string, string | null> = {};
+  const warnings: string[] = [];
+  const missing: string[] = [];
+  for (const [key, obj] of fields) {
+    sources[key] = obj && typeof obj === "object" ? (obj._source ?? null) : null;
+    if (!obj || obj?.error) missing.push(key);
+    if (obj && typeof obj === "object" && obj._warning) warnings.push(`${key}: ${String(obj._warning)}`);
+  }
+  const financialRows = Number(pack?.financial?.row_count ?? pack?.financial?.rows?.length ?? 0);
+  if (!financialRows) missing.push("financial.rows");
+  return {
+    ok: missing.length === 0 && warnings.length === 0,
+    sources,
+    warnings,
+    missing: Array.from(new Set(missing)),
+  };
+}
+
+async function refreshWatchItem(code: string) {
+  if (!(await ensureSidecar())) throw new Error("数据边车启动失败");
+  const pack = await buildDataPack(code);
+  const name = await resolveStockName(code, pack);
+  (pack as any).name = name;
+  const valuation = pack.valuation as any;
+  const quote = pack.quote as any;
+  return {
+    code,
+    name,
+    updatedAt: new Date().toISOString(),
+    price: Number.isFinite(Number(quote?.price)) ? Number(quote.price) : null,
+    pe: Number.isFinite(Number(valuation?.pe_ttm)) ? Number(valuation.pe_ttm) : null,
+    pb: Number.isFinite(Number(valuation?.pb)) ? Number(valuation.pb) : null,
+    marketCap: Number.isFinite(Number(valuation?.total_mv)) ? Number(valuation.total_mv) : null,
+    financialRows: Number((pack.financial as any)?.row_count ?? 0),
+    dividendYield: Number.isFinite(Number((pack.dividend as any)?.latest_yield_pct)) ? Number((pack.dividend as any).latest_yield_pct) : null,
+    pePercentile: Number.isFinite(Number((pack.historicalPE as any)?.pe_percentile)) ? Number((pack.historicalPE as any).pe_percentile) : null,
+    dataQuality: dataQualityFromPack(pack),
+  };
 }
 
 function saveReport(
@@ -427,6 +527,44 @@ ipcMain.handle("search-stocks", async (_e, query: string) => {
 ipcMain.handle("list-reports", async () => listReports());
 
 ipcMain.handle("delete-report", async (_e, path: string) => deleteReport(path));
+
+ipcMain.handle("delete-reports", async (_e, paths: string[]) => deleteReports(Array.isArray(paths) ? paths : []));
+
+ipcMain.handle("get-app-state", async () => readAppState());
+
+ipcMain.handle("save-app-state", async (_e, state: any) => writeAppState(state));
+
+ipcMain.handle("refresh-watch-item", async (_e, code: string) => refreshWatchItem(String(code ?? "").trim()));
+
+ipcMain.handle("get-diagnostics", async () => {
+  const cfg = readEnvFile();
+  const healthOk = await data.health().catch(() => false);
+  const reports = listReports();
+  return {
+    appVersion: app.getVersion(),
+    isPackaged: IS_PACKAGED,
+    sidecar: {
+      ok: healthOk,
+      url: SIDECAR_URL,
+      pid: sidecarProc?.pid ?? null,
+      running: Boolean(sidecarProc && !sidecarProc.killed),
+    },
+    model: process.env.LLM_MODEL ?? cfg.LLM_MODEL ?? "",
+    llmKeySet: Boolean(process.env.LLM_API_KEY || process.env.LKEAP_API_KEY || cfg.LLM_API_KEY),
+    paths: {
+      userRoot: USER_ROOT,
+      reportsDir: REPORTS_DIR,
+      trashDir: TRASH_DIR,
+      appStatePath: APP_STATE_PATH,
+      envPath: ENV_PATH,
+    },
+    reports: {
+      count: reports.length,
+      trashCount: countTrashItems(),
+    },
+    recentEvents: RECENT_EVENTS.slice(0, 40),
+  };
+});
 
 ipcMain.handle("read-report", async (_e, path: string) => {
   if (!path.startsWith(REPORTS_DIR)) throw new Error("invalid path");
@@ -599,6 +737,7 @@ ipcMain.handle("ask", async (event, code: string) => {
     financial_rows: (pack.financial as any)?.row_count ?? 0,
     dividend_yield_pct: (pack.dividend as any)?.latest_yield_pct ?? null,
     pe_percentile: (pack.historicalPE as any)?.pe_percentile ?? null,
+    dataQuality: dataQualityFromPack(pack),
   });
 
   // 顺序跑每位大师（流式）
