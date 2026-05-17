@@ -602,11 +602,21 @@ export default function App() {
     setAiBusy(true);
     setAiResult(null);
     try {
+      const usefulCurrentStats = pack
+        ? valStats.filter((s) => s.value !== "—" && s.value !== "")
+        : [];
       const result = await window.vc.aiTask(kind, {
+        activeMode: mode,
         activeView: workspace,
         currentInput: code,
+        currentStock: pack
+          ? { code: pack.code, name: pack.name }
+          : activeWatch
+            ? { code: activeWatch.code, name: activeWatch.name, from: "watchlist" }
+            : null,
         currentPack: pack,
-        currentStats: valStats,
+        currentStats: usefulCurrentStats.length > 0 ? usefulCurrentStats : null,
+        hasCurrentPanelData: Boolean(pack && usefulCurrentStats.length > 0),
         watchlist,
         screenedWatchlist,
         archiveCode,
@@ -616,6 +626,11 @@ export default function App() {
         compareRows,
         principles,
         exportText,
+        contextNotes: [
+          pack
+            ? "currentPack/currentStats 来自当前打开的实时分析面板。"
+            : "当前没有打开实时分析面板；自选、对比、档案任务请以 watchlist/archiveWatch/compareRows 为准，不要把 currentStats 缺失视为数据源异常。",
+        ],
         ...extra,
       });
       setAiResult(result);

@@ -55,6 +55,8 @@ export async function runWorkbenchTask(
     "你只能基于用户提供的 JSON 上下文做整理、解释和建议，不能发明任何数字、日期、公司事实或数据来源。",
     "你不提供买入、卖出、持有建议；只能判断是否值得继续研究、需要复核什么、下一步看什么。",
     "如果数据不足，必须明确写入 warnings。",
+    "如果 currentPack/currentStats 为 null，表示当前没有打开实时公司快照，不代表数据源异常；自选、对比、档案任务应优先使用 watchlist、archiveWatch、compareRows 的快照数据。",
+    "不要把 currentStats 为空描述成某家公司面板数据异常，除非上下文明确给出 currentPack 且该公司的关键字段缺失。",
     "输出必须是严格 JSON，不要 Markdown，不要代码块。",
     "JSON schema: {\"title\": string, \"summary\": string, \"bullets\": string[], \"actions\": string[], \"warnings\": string[]}",
     "bullets 最多 5 条，actions 最多 5 条，warnings 最多 3 条。每条尽量短。",
