@@ -659,6 +659,27 @@ export default function App() {
     }
   };
 
+  const onDeleteReport = async (r: ReportItem) => {
+    const reportLabel = stockLabel(r.name, r.code) || r.file;
+    const ok = window.confirm(`删除历史报告「${reportLabel} · ${r.date || r.type.toUpperCase()}」？\n\n这会同时删除 HTML、Markdown、原始数据和复核结果文件。`);
+    if (!ok) return;
+    try {
+      await window.vc.deleteReport(r.path);
+      await refreshReports();
+      if (viewing?.htmlPath === r.path || viewing?.title.includes(reportLabel)) {
+        setViewing(null);
+        setHistoryReviewMsg(null);
+      }
+      if (savedPath === r.path) {
+        setSavedPath(null);
+        setSavedHtmlUrl(null);
+        setReviewResult(null);
+      }
+    } catch (e: any) {
+      setError(`删除报告失败：${String(e?.message ?? e)}`);
+    }
+  };
+
   const onHistoryReview = async () => {
     if (!viewing?.htmlPath || historyReviewing) return;
     setHistoryReviewing(true);
@@ -758,17 +779,25 @@ export default function App() {
           <div className="flex-1 overflow-y-auto">
             {reports.length === 0 && <p className="text-mute text-xs px-3 py-2">还没有报告</p>}
             {reports.map((r) => (
-              <button
-                key={r.path}
-                onClick={() => onPickReport(r)}
-                className="w-full text-left px-3 py-2 hover:bg-panel2 border-b border-line text-sm"
-              >
-                <div className="text-ink flex items-center gap-1">
-                  <span className="truncate">{r.name || r.code || r.file}</span>
-                  {r.type === "html" && <span className="text-[10px] text-jade border border-jade/40 rounded px-1">HTML</span>}
-                </div>
-                <div className="text-mute text-xs">{r.code ? `${r.code} · ${r.date}` : r.date}</div>
-              </button>
+              <div key={r.path} className="group border-b border-line hover:bg-panel2 flex items-center">
+                <button
+                  onClick={() => onPickReport(r)}
+                  className="min-w-0 flex-1 text-left px-3 py-2 text-sm"
+                >
+                  <div className="text-ink flex items-center gap-1 min-w-0">
+                    <span className="truncate">{r.name || r.code || r.file}</span>
+                    {r.type === "html" && <span className="text-[10px] text-jade border border-jade/40 rounded px-1">HTML</span>}
+                  </div>
+                  <div className="text-mute text-xs">{r.code ? `${r.code} · ${r.date}` : r.date}</div>
+                </button>
+                <button
+                  onClick={() => onDeleteReport(r)}
+                  title="删除报告"
+                  className="mr-2 px-2 py-1 rounded text-xs text-mute hover:bg-red/10 hover:text-red-soft opacity-0 group-hover:opacity-100 focus:opacity-100"
+                >
+                  删除
+                </button>
+              </div>
             ))}
           </div>
         </aside>}
@@ -1092,10 +1121,13 @@ export default function App() {
                     <div className="divide-y divide-line">
                       {archiveReports.length === 0 && <div className="px-4 py-8 text-sm text-mute">暂无该公司的历史报告。</div>}
                       {archiveReports.map((r) => (
-                        <button key={r.path} onClick={() => onPickReport(r)} className="w-full px-4 py-3 text-left hover:bg-panel2 flex items-center justify-between">
-                          <span className="text-sm text-ink">{stockLabel(r.name, r.code) || r.code} · {r.date}</span>
+                        <div key={r.path} className="group w-full px-4 py-3 hover:bg-panel2 flex items-center justify-between gap-3">
+                          <button onClick={() => onPickReport(r)} className="min-w-0 flex-1 text-left">
+                            <span className="text-sm text-ink">{stockLabel(r.name, r.code) || r.code} · {r.date}</span>
+                          </button>
                           <span className="text-xs text-mute">{r.type.toUpperCase()}</span>
-                        </button>
+                          <button onClick={() => onDeleteReport(r)} className="text-xs text-mute hover:text-red-soft opacity-0 group-hover:opacity-100 focus:opacity-100">删除</button>
+                        </div>
                       ))}
                     </div>
                   </div>

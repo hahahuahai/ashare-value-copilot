@@ -38,6 +38,7 @@ export interface VCApi {
   ensureSidecar: () => Promise<boolean>;
   searchStocks: (query: string) => Promise<StockSearchResult[]>;
   listReports: () => Promise<ReportItem[]>;
+  deleteReport: (path: string) => Promise<{ ok: boolean; deleted: string[] }>;
   readReport: (path: string) => Promise<string>;
   fileUrl: (path: string) => Promise<string>;
   openReportsDir: () => Promise<void>;
@@ -71,6 +72,7 @@ const api: VCApi = {
   ensureSidecar: () => ipcRenderer.invoke("ensure-sidecar"),
   searchStocks: (query) => ipcRenderer.invoke("search-stocks", query),
   listReports: () => ipcRenderer.invoke("list-reports"),
+  deleteReport: (path) => ipcRenderer.invoke("delete-report", path),
   readReport: (path) => ipcRenderer.invoke("read-report", path),
   fileUrl: (path) => ipcRenderer.invoke("file-url", path),
   openReportsDir: () => ipcRenderer.invoke("open-reports-dir"),

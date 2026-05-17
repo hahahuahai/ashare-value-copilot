@@ -9,8 +9,8 @@ import { RES_ROOT, USER_ROOT, IS_PACKAGED } from "./bootstrap-env";
 
 import { app, BrowserWindow, ipcMain, shell, dialog } from "electron";
 import { spawn, ChildProcess } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
-import { resolve, dirname, join } from "node:path";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import { resolve, dirname, join, basename, extname } from "node:path";
 
 import { buildDataPack, data } from "@vc/data";
 import {
@@ -230,6 +230,40 @@ function listReports() {
     .sort((a, b) => b.mtime - a.mtime);
 }
 
+function assertReportPath(inputPath: string): string {
+  const path = resolve(String(inputPath ?? ""));
+  const root = resolve(REPORTS_DIR);
+  if (path !== root && !path.startsWith(root + "/")) throw new Error("invalid path");
+  if (!existsSync(path)) throw new Error("报告不存在");
+  const ext = extname(path).toLowerCase();
+  if (ext !== ".html" && ext !== ".md") throw new Error("只能删除报告文件");
+  return path;
+}
+
+function deleteReport(inputPath: string): { ok: boolean; deleted: string[] } {
+  const path = assertReportPath(inputPath);
+  const ext = extname(path);
+  const base = path.slice(0, -ext.length);
+  const fileBase = basename(base);
+  const deleted: string[] = [];
+  const candidates = [
+    `${base}.html`,
+    `${base}.md`,
+    `${base}.judge.txt`,
+    `${base}.payload.json`,
+    `${base}.review.raw.txt`,
+    `${base}.review.json`,
+  ];
+
+  for (const candidate of candidates) {
+    if (basename(candidate).startsWith(fileBase) && existsSync(candidate)) {
+      unlinkSync(candidate);
+      deleted.push(candidate);
+    }
+  }
+  return { ok: true, deleted };
+}
+
 function saveReport(
   code: string,
   name: string,
@@ -391,6 +425,8 @@ ipcMain.handle("search-stocks", async (_e, query: string) => {
 });
 
 ipcMain.handle("list-reports", async () => listReports());
+
+ipcMain.handle("delete-report", async (_e, path: string) => deleteReport(path));
 
 ipcMain.handle("read-report", async (_e, path: string) => {
   if (!path.startsWith(REPORTS_DIR)) throw new Error("invalid path");
