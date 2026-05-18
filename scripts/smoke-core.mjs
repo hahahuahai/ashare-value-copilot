@@ -19,7 +19,7 @@ const preload = readFileSync(file("apps/desktop/src/preload/index.ts"), "utf-8")
 const app = readFileSync(file("apps/desktop/src/renderer/src/App.tsx"), "utf-8");
 const icon = file("apps/desktop/resources/icon.icns");
 
-check("desktop version bumped", desktopPkg.version === "0.2.6", desktopPkg.version);
+check("desktop version bumped", desktopPkg.version === "0.2.7", desktopPkg.version);
 check("mac icon exists", existsSync(icon) && statSync(icon).size > 10_000, icon);
 check("diagnostics IPC exposed", main.includes('"get-diagnostics"') && preload.includes("getDiagnostics"));
 check("watchlist refresh IPC exposed", main.includes('"refresh-watch-item"') && preload.includes("refreshWatchItem"));
@@ -29,6 +29,10 @@ check("renderer has diagnostics center", app.includes("诊断中心") && app.inc
 check("renderer has data quality badge", app.includes("DataQualityBadge"));
 check("renderer has watchlist refresh", app.includes("刷新全部") && app.includes("refreshWatchItem"));
 check("renderer has report search and batch delete", app.includes("搜索历史") && app.includes("onDeleteSelectedReports"));
+check("renderer has onboarding flow", app.includes("首次使用") && app.includes("OnboardingCard"));
+check("renderer has report summary card", app.includes("ReportSummaryCard") && app.includes("查看完整报告"));
+check("renderer has actionable errors", app.includes("ActionableError") && app.includes("打开设置"));
+check("renderer has unified AI side panel", app.includes("AI 助手") && app.includes("aiPanelOpen"));
 
 const failed = checks.filter((x) => !x.pass);
 for (const item of checks) {

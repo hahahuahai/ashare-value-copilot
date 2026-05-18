@@ -102,6 +102,8 @@ interface DiagnosticsInfo {
   recentEvents?: Array<{ time: string; level: "info" | "warn" | "error"; message: string }>;
 }
 
+type OnboardingStep = "config" | "search" | "report";
+
 const workspaceTabs: Array<{ id: WorkspaceTab; label: string; hint: string }> = [
   { id: "analysis", label: "分析", hint: "单家公司报告" },
   { id: "watchlist", label: "自选", hint: "长期跟踪池" },
@@ -224,6 +226,176 @@ function DataQualityBadge({ quality }: { quality?: DataQualityInfo }) {
     >
       数据需复核 · 缺 {missing} · 警 {warnings}
     </span>
+  );
+}
+
+function ProgressSteps({ phase, enabledMasters }: { phase: Phase; enabledMasters: MasterInfo[] }) {
+  const currentIndex = phase === "idle" || phase === "error" ? 0 : phase === "fetching" ? 1 : phase === "judge" ? 3 : phase === "done" ? 4 : 2;
+  const activeMaster = enabledMasters.find((x) => x.id === phase)?.displayName;
+  const steps = [
+    { label: "输入公司", hint: "选择 A 股" },
+    { label: "拉取数据", hint: "DataPack" },
+    { label: "大师分析", hint: activeMaster ?? "多角色" },
+    { label: "综合裁判", hint: "结论" },
+    { label: "生成报告", hint: "HTML" },
+  ];
+  return (
+    <div className="bg-panel rounded-lg border border-line px-4 py-3 shadow-[var(--shadow-soft)]">
+      <div className="grid grid-cols-5 gap-2">
+        {steps.map((step, idx) => {
+          const done = idx < currentIndex || phase === "done";
+          const active = idx === currentIndex && phase !== "done";
+          return (
+            <div key={step.label} className="min-w-0">
+              <div className={"h-1.5 rounded-full mb-2 " + (done ? "bg-jade" : active ? "bg-gold" : "bg-line")} />
+              <div className={"text-xs font-semibold truncate " + (done || active ? "text-ink" : "text-mute")}>{step.label}</div>
+              <div className="text-[11px] text-mute truncate">{step.hint}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function OnboardingCard({
+  step,
+  healthOk,
+  onOpenSettings,
+  onDismiss,
+}: {
+  step: OnboardingStep;
+  healthOk: boolean;
+  onOpenSettings: () => void;
+  onDismiss: () => void;
+}) {
+  const steps: Array<{ id: OnboardingStep; label: string; detail: string }> = [
+    { id: "config", label: "配置 AI", detail: healthOk ? "数据服务正常，确认模型 Key 后即可分析。" : "先检查数据服务和模型配置。" },
+    { id: "search", label: "输入公司", detail: "支持股票代码或公司简称。" },
+    { id: "report", label: "生成报告", detail: "报告完成后再做 AI 复核并加入自选。" },
+  ];
+  const activeIndex = steps.findIndex((x) => x.id === step);
+  return (
+    <section className="bg-panel rounded-lg border border-line px-5 py-4 shadow-[var(--shadow-soft)]">
+      <div className="flex items-start gap-4">
+        <div className="flex-1">
+          <h2 className="text-base font-semibold text-ink">首次使用</h2>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {steps.map((item, idx) => (
+              <div key={item.id} className={"border rounded-lg px-3 py-3 " + (idx <= activeIndex ? "bg-panel2 border-gold/30" : "bg-transparent border-line")}>
+                <div className="text-sm font-semibold text-ink">{idx + 1}. {item.label}</div>
+                <div className="text-xs text-mute mt-1 leading-relaxed">{item.detail}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <button onClick={onOpenSettings} className="bg-ink text-white hover:bg-[#2c2c2e] px-4 py-2 rounded text-sm font-semibold">打开设置</button>
+          <button onClick={onDismiss} className="bg-panel2 hover:bg-white text-ink border border-line px-4 py-2 rounded text-sm font-semibold">我知道了</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ReportSummaryCard({
+  pack,
+  reviewResult,
+  riskSignals,
+  onOpenReport,
+  onReview,
+  onAddWatch,
+  onAiSummary,
+  reviewing,
+  hasReport,
+}: {
+  pack: DataPackInfo;
+  reviewResult: { ok: boolean; score?: number; level?: string; issues?: number; error?: string } | null;
+  riskSignals: RiskSignal[];
+  onOpenReport: () => void;
+  onReview: () => void;
+  onAddWatch: () => void;
+  onAiSummary: () => void;
+  reviewing: boolean;
+  hasReport: boolean;
+}) {
+  const v = pack.valuation ?? {};
+  const keyReasons = [
+    `PE ${fmt(v.pe_ttm)} · PB ${fmt(v.pb)}`,
+    `财务数据 ${fmt(pack.financial_rows, 0)} 期`,
+    pack.dataQuality?.ok ? "数据源完整" : "数据需要复核",
+  ];
+  const mainRisks = riskSignals.slice(0, 3).map((x) => x.title);
+  return (
+    <section className="bg-panel rounded-lg border border-line px-4 py-4 shadow-[var(--shadow-soft)]">
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-ink truncate">{stockLabel(pack.name, pack.code)}</h2>
+            <DataQualityBadge quality={pack.dataQuality} />
+          </div>
+          <p className="text-xs text-mute mt-1">先看摘要，再决定是否打开完整报告或加入自选。</p>
+        </div>
+        {reviewResult?.ok && <span className="text-xs text-jade bg-jade/10 border border-jade/20 rounded px-2 py-1">复核 {reviewResult.score}/100</span>}
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-3">
+        <div className="bg-panel2 border border-line rounded-lg px-3 py-3">
+          <div className="text-xs font-semibold text-ink">当前结论</div>
+          <div className="text-sm text-ink mt-2">需要结合完整报告判断</div>
+          <div className="text-xs text-mute mt-1">本卡只做入口摘要，不替代报告。</div>
+        </div>
+        <div className="bg-panel2 border border-line rounded-lg px-3 py-3">
+          <div className="text-xs font-semibold text-ink">核心理由</div>
+          <ul className="mt-2 space-y-1 text-xs text-mute">{keyReasons.map((x) => <li key={x}>• {x}</li>)}</ul>
+        </div>
+        <div className="bg-panel2 border border-line rounded-lg px-3 py-3">
+          <div className="text-xs font-semibold text-ink">优先复核</div>
+          <ul className="mt-2 space-y-1 text-xs text-mute">{mainRisks.map((x) => <li key={x}>• {x}</li>)}</ul>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button onClick={onOpenReport} disabled={!hasReport} className="bg-gold hover:bg-red-soft text-white px-4 py-2 rounded text-sm font-semibold shadow-sm disabled:opacity-50">查看完整报告</button>
+        <button onClick={onReview} disabled={!hasReport || reviewing} className="bg-ink hover:bg-[#2c2c2e] text-white px-4 py-2 rounded text-sm font-semibold shadow-sm disabled:opacity-50">{reviewing ? "复核中…" : "AI 复核"}</button>
+        <button onClick={onAddWatch} className="bg-panel2 hover:bg-white text-ink border border-line px-4 py-2 rounded text-sm font-semibold shadow-sm">加入/更新自选</button>
+        <button onClick={onAiSummary} className="bg-panel2 hover:bg-white text-ink border border-line px-4 py-2 rounded text-sm font-semibold shadow-sm">AI 摘要</button>
+      </div>
+    </section>
+  );
+}
+
+function ActionableError({
+  message,
+  onDismiss,
+  onDiagnostics,
+  onSettings,
+  onRetry,
+}: {
+  message: string;
+  onDismiss: () => void;
+  onDiagnostics: () => void;
+  onSettings: () => void;
+  onRetry: () => void;
+}) {
+  const lower = message.toLowerCase();
+  const isConfig = lower.includes("key") || lower.includes("llm") || message.includes("模型") || message.includes("配置");
+  const isSidecar = message.includes("边车") || message.includes("数据");
+  const reason = isConfig ? "AI 配置可能不完整。" : isSidecar ? "数据服务可能没有启动或数据源临时不可用。" : "当前操作没有完成。";
+  return (
+    <div className="bg-red/10 border border-red/20 text-red-soft px-4 py-3 rounded-lg text-sm">
+      <div className="flex items-start gap-3">
+        <div className="flex-1">
+          <div className="font-semibold text-ink">操作失败</div>
+          <div className="mt-1">{message}</div>
+          <div className="mt-1 text-xs text-mute">{reason}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={onRetry} className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-1.5 rounded text-xs font-semibold">重试</button>
+          <button onClick={onDiagnostics} className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-1.5 rounded text-xs font-semibold">诊断</button>
+          <button onClick={onSettings} className="bg-ink text-white px-3 py-1.5 rounded text-xs font-semibold">设置</button>
+          <button onClick={onDismiss} className="text-mute hover:text-ink">×</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -404,10 +576,13 @@ export default function App() {
   const [compareCodes, setCompareCodes] = useState<[string, string]>(["", ""]);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiResult, setAiResult] = useState<AiTaskResult | null>(null);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(() => readJson<boolean>("vc.onboarding.dismissed", false));
   const searchCacheRef = useRef<Record<string, StockSearchResult[]>>({});
 
   useEffect(() => writeJson("vc.watchlist", watchlist), [watchlist]);
   useEffect(() => writeJson("vc.principles", principles), [principles]);
+  useEffect(() => writeJson("vc.onboarding.dismissed", onboardingDismissed), [onboardingDismissed]);
   useEffect(() => {
     let cancelled = false;
     window.vc.getAppState()
@@ -703,6 +878,7 @@ export default function App() {
   const runAiTask = async (kind: string, extra: Record<string, any> = {}) => {
     setAiBusy(true);
     setAiResult(null);
+    setAiPanelOpen(true);
     try {
       const usefulCurrentStats = pack
         ? valStats.filter((s) => s.value !== "—" && s.value !== "")
@@ -750,6 +926,9 @@ export default function App() {
       setAiBusy(false);
     }
   };
+
+  const onboardingStep: OnboardingStep = !healthInfo?.ok ? "config" : reports.length === 0 && !pack ? "search" : "report";
+  const shouldShowOnboarding = !onboardingDismissed && !isAnalyzing && mode === "start";
 
   const onPickReport = async (r: ReportItem) => {
     setHistoryReviewMsg(null);
@@ -837,7 +1016,7 @@ export default function App() {
           <div className="w-7 h-7 rounded bg-red flex items-center justify-center text-white font-bold text-sm shadow-sm">价</div>
           <div>
             <div className="text-sm font-semibold">价投合伙人</div>
-            <div className="text-xs text-mute">A-Share Value Council · v0.2.6</div>
+            <div className="text-xs text-mute">A-Share Value Council · v0.2.7</div>
           </div>
         </div>
         <div className="flex-1" />
@@ -858,6 +1037,7 @@ export default function App() {
         <div className="flex items-center gap-3 text-xs text-mute">
           <span>数据 {healthInfo?.ok ? <span className="text-jade">●</span> : <span className="text-red-soft">●</span>}</span>
           <span>模型 <span className="text-gold">{healthInfo?.model ?? "—"}</span></span>
+          <button onClick={() => setAiPanelOpen(true)} className="text-mute hover:text-gold">AI 助手</button>
           <button onClick={openDiagnostics} className="text-mute hover:text-gold">诊断</button>
           <button onClick={() => window.vc.openReportsDir()} className="text-mute hover:text-gold">📂 报告目录</button>
           <button
@@ -1045,13 +1225,27 @@ export default function App() {
             )}
           </div>
 
-          {error && <div className="bg-red/10 border border-red/20 text-red-soft px-3 py-2 rounded text-sm">{error}</div>}
-
-          <AiInsightPanel result={aiResult} busy={aiBusy} onClose={() => { setAiResult(null); setAiBusy(false); }} />
+          {error && (
+            <ActionableError
+              message={error}
+              onDismiss={() => setError(null)}
+              onDiagnostics={openDiagnostics}
+              onSettings={() => { setForcedSetup(false); setSettingsOpen(true); }}
+              onRetry={onAnalyze}
+            />
+          )}
 
           {mode === "start" ? (
             <div className="flex-1 min-h-0 overflow-y-auto">
               <div className="max-w-5xl mx-auto space-y-3">
+                {shouldShowOnboarding && (
+                  <OnboardingCard
+                    step={onboardingStep}
+                    healthOk={Boolean(healthInfo?.ok)}
+                    onOpenSettings={() => { setForcedSetup(false); setSettingsOpen(true); }}
+                    onDismiss={() => setOnboardingDismissed(true)}
+                  />
+                )}
                 {!pack && !isAnalyzing && (
                   <section className="bg-panel rounded-lg border border-line px-6 py-8 shadow-[var(--shadow-soft)] backdrop-blur-xl">
                     <div className="max-w-2xl">
@@ -1072,48 +1266,27 @@ export default function App() {
                 )}
 
                 {(pack || isAnalyzing) && (
-                  <section className="bg-panel rounded-lg border border-line px-4 py-4 shadow-[var(--shadow-soft)] backdrop-blur-xl">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <h2 className="text-lg font-semibold text-ink truncate">{pack ? stockLabel(pack.name, pack.code) : "正在生成报告"}</h2>
-                        <p className="text-xs text-mute mt-1">{pack ? `财报 ${pack.financial_rows} 期 · 拉取 ${new Date(pack.fetched_at).toLocaleTimeString("zh-CN")}` : statusText}</p>
-                      </div>
-                      {pack && <DataQualityBadge quality={pack.dataQuality} />}
-                      <StatBadge phase={phase} enabledMasters={enabledMasters} />
-                    </div>
-                    {pack && (
-                      <div className="grid grid-cols-6 gap-2 mt-4">
-                        {valStats.map((s) => <StatTile key={s.label} {...s} />)}
-                      </div>
+                  <>
+                    <ProgressSteps phase={phase} enabledMasters={enabledMasters} />
+                    {pack ? (
+                      <ReportSummaryCard
+                        pack={pack}
+                        reviewResult={reviewResult}
+                        riskSignals={riskSignals}
+                        reviewing={reviewing}
+                        hasReport={Boolean(savedHtmlUrl)}
+                        onOpenReport={() => savedHtmlUrl && setViewing({ title: `${stockLabel(pack?.name, pack?.code) || code} · 最新报告`, htmlUrl: savedHtmlUrl })}
+                        onReview={onReview}
+                        onAddWatch={addCurrentToWatchlist}
+                        onAiSummary={() => runAiTask("daily-brief")}
+                      />
+                    ) : (
+                      <section className="bg-panel rounded-lg border border-line px-4 py-4 shadow-[var(--shadow-soft)]">
+                        <h2 className="text-lg font-semibold text-ink">正在生成报告</h2>
+                        <p className="text-xs text-mute mt-1">{statusText}</p>
+                      </section>
                     )}
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                      {savedHtmlUrl && (
-                        <button onClick={() => setViewing({ title: `${stockLabel(pack?.name, pack?.code) || code} · 最新报告`, htmlUrl: savedHtmlUrl })} className="bg-gold hover:bg-red-soft text-white px-4 py-2 rounded text-sm font-semibold shadow-sm">
-                          查看报告
-                        </button>
-                      )}
-                      {savedPath && (
-                        <button onClick={onReview} disabled={reviewing} className="bg-ink hover:bg-[#2c2c2e] text-white border border-black/10 px-4 py-2 rounded text-sm font-semibold shadow-sm disabled:opacity-50">
-                          {reviewing ? "复核中…" : "AI 复核"}
-                        </button>
-                      )}
-                      {pack && (
-                        <button onClick={addCurrentToWatchlist} className="bg-panel2 hover:bg-white text-ink border border-line px-4 py-2 rounded text-sm font-semibold shadow-sm">
-                          {activeWatch ? "更新自选" : "加入自选"}
-                        </button>
-                      )}
-                      {pack && (
-                        <button onClick={() => runAiTask("daily-brief")} disabled={aiBusy} className="bg-panel2 hover:bg-white text-ink border border-line px-4 py-2 rounded text-sm font-semibold shadow-sm disabled:opacity-50">
-                          AI 摘要
-                        </button>
-                      )}
-                      {reviewResult && (
-                        <span className={(reviewResult.ok ? "text-jade" : "text-red-soft") + " text-xs"}>
-                          {reviewResult.ok ? `✓ 复核 ${reviewResult.score}/100 · ${reviewResult.issues} 条问题` : "✗ 复核失败"}
-                        </span>
-                      )}
-                    </div>
-                  </section>
+                  </>
                 )}
 
                 {(isAnalyzing || masterCards.some((c) => c.answer || c.thinking)) && (
@@ -1428,6 +1601,35 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {aiPanelOpen && (
+        <div className="fixed inset-y-0 right-0 w-[420px] max-w-[92vw] bg-panel border-l border-line shadow-[var(--shadow-soft)] z-50 flex flex-col">
+          <div className="px-4 py-3 border-b border-line flex items-center gap-3">
+            <div className="w-8 h-8 rounded bg-ink text-white flex items-center justify-center text-xs font-semibold">AI</div>
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-ink">AI 助手</div>
+              <div className="text-xs text-mute">根据当前页面给建议，不新增未来源数字。</div>
+            </div>
+            <button onClick={() => setAiPanelOpen(false)} className="text-mute hover:text-ink">✕</button>
+          </div>
+          <div className="p-4 border-b border-line">
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => runAiTask("daily-brief")} disabled={aiBusy} className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-2 rounded text-xs font-semibold disabled:opacity-50">今日简报</button>
+              <button onClick={() => runAiTask("watchlist-organize")} disabled={aiBusy || watchlist.length === 0} className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-2 rounded text-xs font-semibold disabled:opacity-50">整理自选</button>
+              <button onClick={() => runAiTask("risk-explain")} disabled={aiBusy || !pack} className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-2 rounded text-xs font-semibold disabled:opacity-50">解释风险</button>
+              <button onClick={() => runAiTask("compare-explain")} disabled={aiBusy || compareRows.length < 2} className="bg-panel2 hover:bg-white text-ink border border-line px-3 py-2 rounded text-xs font-semibold disabled:opacity-50">对比结论</button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            {!aiResult && !aiBusy && (
+              <div className="text-sm text-mute leading-relaxed">
+                选择一个 AI 动作，助手会结合当前股票、自选股、风险雷达、历史报告和投资原则生成下一步建议。
+              </div>
+            )}
+            <AiInsightPanel result={aiResult} busy={aiBusy} onClose={() => { setAiResult(null); setAiBusy(false); }} />
+          </div>
+        </div>
+      )}
 
       {diagnosticsOpen && (
         <div className="fixed inset-0 bg-black/25 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setDiagnosticsOpen(false)}>
